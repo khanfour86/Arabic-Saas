@@ -1,6 +1,6 @@
 import { Router, type IRouter, type RequestHandler } from "express";
 import { db, customersTable, profilesTable, measurementsTable } from "@workspace/db";
-import { eq, and, ilike } from "drizzle-orm";
+import { eq, and, ilike, desc } from "drizzle-orm";
 import { CreateCustomerBody, UpdateCustomerBody, CreateProfileBody } from "@workspace/api-zod";
 import { requireAuth, requireShopRole, type AuthUser } from "../lib/auth";
 
@@ -15,7 +15,7 @@ const isShopUser: RequestHandler = (req, res, next) => {
 async function getProfilesWithMeasurements(shopId: number, customerId: number) {
   const profiles = await db.select().from(profilesTable)
     .where(and(eq(profilesTable.shopId, shopId), eq(profilesTable.customerId, customerId)))
-    .orderBy(profilesTable.isMain, profilesTable.createdAt);
+    .orderBy(desc(profilesTable.isMain), profilesTable.createdAt);
 
   const result = [];
   for (const profile of profiles) {
@@ -145,6 +145,18 @@ router.patch("/shop/customers/:customerId", isShopUser, async (req, res): Promis
     res.status(404).json({ error: "العميل غير موجود" });
     return;
   }
+
+  // Sync name to the main profile so both stay in step
+  if (parsed.data.name) {
+    await db.update(profilesTable)
+      .set({ name: parsed.data.name })
+      .where(and(
+        eq(profilesTable.shopId, user.shopId!),
+        eq(profilesTable.customerId, id),
+        eq(profilesTable.isMain, true),
+      ));
+  }
+
   res.json(customer);
 });
 
@@ -219,6 +231,17 @@ router.patch("/shop/profiles/:profileId", isShopUser, async (req, res): Promise<
     res.status(404).json({ error: "الملف غير موجود" });
     return;
   }
+
+  // If this is the main profile, sync the name back to the customer record too
+  if (profile.isMain && req.body.name) {
+    await db.update(customersTable)
+      .set({ name: req.body.name })
+      .where(and(
+        eq(customersTable.shopId, user.shopId!),
+        eq(customersTable.id, profile.customerId),
+      ));
+  }
+
   res.json(profile);
 });
 
