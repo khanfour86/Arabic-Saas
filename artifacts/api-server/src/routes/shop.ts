@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, invoicesTable, subOrdersTable, customersTable, profilesTable, measurementsTable, usersTable } from "@workspace/db";
-import { eq, and, gte } from "drizzle-orm";
+import { eq, and, gte, desc } from "drizzle-orm";
 import { requireAuth, requireShopRole, type AuthUser } from "../lib/auth";
 import { hashPassword } from "../lib/auth";
 
@@ -25,7 +25,8 @@ router.get("/shop/tailor-queue", requireAuth, requireShopRole("shop_manager", "t
   const user = (req as any).user as AuthUser;
 
   const invoices = await db.select().from(invoicesTable)
-    .where(and(eq(invoicesTable.shopId, user.shopId!), eq(invoicesTable.status, "under_tailoring")));
+    .where(and(eq(invoicesTable.shopId, user.shopId!), eq(invoicesTable.status, "under_tailoring")))
+    .orderBy(desc(invoicesTable.createdAt));
 
   const items = [];
   for (const invoice of invoices) {
