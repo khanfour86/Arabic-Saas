@@ -25,10 +25,11 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   const token = localStorage.getItem('auth_token');
   if (token) {
     init = init || {};
-    init.headers = {
-      ...init.headers,
-      Authorization: `Bearer ${token}`
-    };
+    // Use the Headers constructor to safely merge — spreading a Headers object
+    // with { ...headers } loses all values since Headers entries are not enumerable.
+    const headers = new Headers(init.headers as HeadersInit | undefined);
+    headers.set('Authorization', `Bearer ${token}`);
+    init.headers = headers;
   }
   return originalFetch(input, init);
 };

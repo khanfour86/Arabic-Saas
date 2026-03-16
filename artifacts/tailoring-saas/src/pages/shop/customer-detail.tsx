@@ -169,8 +169,11 @@ function MeasurementsDialog({ profile, customerId }: { profile: any, customerId:
     mutation: {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: [`/api/shop/customers/${customerId}`] });
-        toast({ title: 'تم حفظ القياسات' });
+        toast({ title: 'تم حفظ القياسات بنجاح' });
         setOpen(false);
+      },
+      onError: (err: any) => {
+        toast({ title: 'خطأ في الحفظ', description: err?.message || 'حدث خطأ غير متوقع', variant: 'destructive' });
       }
     }
   });
