@@ -20,13 +20,22 @@ export function InvoicesList() {
     return () => clearTimeout(timer);
   }, [search]);
 
-  const isNumber = debouncedSearch && !isNaN(Number(debouncedSearch));
-  
-  const { data, isLoading } = useListInvoices({ 
-    status: statusFilter === 'all' ? undefined : statusFilter,
-    phone: isNumber && debouncedSearch.length >= 8 ? debouncedSearch : undefined,
-    invoiceNumber: isNumber && debouncedSearch.length < 8 ? debouncedSearch : undefined,
-  });
+  const isNumeric = debouncedSearch.length > 0 && /^\d+$/.test(debouncedSearch);
+  // Invoice numbers are 4 digits (1001+), phone numbers are 8 digits
+  // Use length to decide: ≤4 digits → invoice number, ≥5 digits → phone partial match
+  const isPhoneSearch = isNumeric && debouncedSearch.length >= 5;
+  const isInvoiceSearch = isNumeric && debouncedSearch.length <= 4;
+
+  // Build a clean params object with no undefined values to get correct React Query cache keys
+  const invoiceParams = (() => {
+    const p: Record<string, string> = {};
+    if (statusFilter !== 'all') p.status = statusFilter;
+    if (isPhoneSearch) p.phone = debouncedSearch;
+    if (isInvoiceSearch) p.invoiceNumber = debouncedSearch;
+    return Object.keys(p).length > 0 ? p : undefined;
+  })();
+
+  const { data, isLoading } = useListInvoices(invoiceParams as any);
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">

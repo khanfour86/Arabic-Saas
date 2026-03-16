@@ -1,26 +1,99 @@
-import React, { useState } from 'react';
-import { useGetShopDashboard, useListInvoices } from '@workspace/api-client-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import React, { useState, useRef, useEffect } from 'react';
+import { useGetShopDashboard, useListInvoices, useListCustomers } from '@workspace/api-client-react';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Scissors, CheckCircle, Search, FilePlus, UserPlus, Clock } from 'lucide-react';
+import { Loader2, Scissors, CheckCircle, Search, FilePlus, UserPlus, Clock, User, Phone, ChevronLeft } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { format } from 'date-fns';
+
+function buildParams(search: string) {
+  if (!search) return undefined;
+  if (/^\d+$/.test(search)) return { phone: search };
+  return { name: search };
+}
+
+function CustomerQuickSearch() {
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [inputFocused, setInputFocused] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  const { data } = useListCustomers(buildParams(debouncedSearch));
+  const customers = data?.customers ?? [];
+  const showDropdown = inputFocused && search.length > 0 && customers.length > 0;
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (
+        dropdownRef.current?.contains(e.target as Node) ||
+        inputRef.current?.contains(e.target as Node)
+      ) return;
+      setInputFocused(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  const handleSelect = (id: number) => {
+    setInputFocused(false);
+    setSearch('');
+    setLocation(`/shop/customers/${id}`);
+  };
+
+  return (
+    <div className="relative w-full md:w-96">
+      <Search className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground w-5 h-5 pointer-events-none z-10" />
+      <Input
+        ref={inputRef}
+        placeholder="بحث برقم الهاتف أو الاسم..."
+        className="h-14 pr-12 pl-4 rounded-2xl bg-white shadow-md border-0 focus-visible:ring-primary/20 transition-all hover:shadow-lg text-lg"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        onFocus={() => setInputFocused(true)}
+        autoComplete="off"
+        dir="rtl"
+      />
+
+      {showDropdown && (
+        <div
+          ref={dropdownRef}
+          className="absolute top-full mt-2 right-0 left-0 bg-white rounded-2xl shadow-2xl border border-border/50 z-50 overflow-hidden max-h-64 overflow-y-auto"
+        >
+          {customers.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              className="w-full flex items-center gap-3 px-4 py-3 hover:bg-primary/5 transition-colors text-right border-b border-border/20 last:border-b-0"
+              onMouseDown={(e) => { e.preventDefault(); handleSelect(c.id); }}
+            >
+              <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                <User className="w-4 h-4 text-primary" />
+              </div>
+              <div className="flex-1 min-w-0 text-right">
+                <p className="font-bold text-sm text-foreground">{c.name}</p>
+                <p className="text-xs text-muted-foreground font-mono" dir="ltr">{c.phone}</p>
+              </div>
+              <ChevronLeft className="w-4 h-4 text-muted-foreground shrink-0" />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function ShopDashboard() {
   const { data: stats, isLoading: statsLoading } = useGetShopDashboard();
   const { data: recentInvoices, isLoading: invoicesLoading } = useListInvoices();
-  const [search, setSearch] = useState('');
-  const [, setLocation] = useLocation();
-
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!search) return;
-    // Simple heuristic: if it contains numbers only, search invoices, else customers.
-    // Realistically, we'd search both, but let's navigate to customers search with prefill
-    setLocation(`/shop/customers?q=${encodeURIComponent(search)}`);
-  };
 
   if (statsLoading || invoicesLoading) return <div className="flex justify-center p-12"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
 
@@ -32,18 +105,7 @@ export function ShopDashboard() {
           <h1 className="text-3xl font-display font-bold text-primary">الرئيسية</h1>
           <p className="text-muted-foreground mt-2">نظرة عامة على سير العمل اليوم</p>
         </div>
-
-        <form onSubmit={handleSearch} className="flex gap-2 w-full md:w-96 relative group">
-          <Input 
-            placeholder="بحث برقم الهاتف أو الاسم..." 
-            className="h-14 pl-12 rounded-2xl bg-white shadow-md border-0 focus-visible:ring-primary/20 transition-all group-hover:shadow-lg text-lg"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
-          <Button type="submit" size="icon" className="absolute left-2 top-2 h-10 w-10 rounded-xl bg-primary/10 text-primary hover:bg-primary hover:text-white transition-colors">
-            <Search className="w-5 h-5" />
-          </Button>
-        </form>
+        <CustomerQuickSearch />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -113,7 +175,7 @@ export function ShopDashboard() {
                           {inv.status === 'ready' ? 'جاهز' : inv.status === 'delivered' ? 'مسلم' : 'تحت الخياطة'}
                         </Badge>
                       </div>
-                      <span className="text-sm text-muted-foreground mt-1">{inv.customerName} - {inv.customerPhone}</span>
+                      <span className="text-sm text-muted-foreground mt-1">{inv.customerName} - <span dir="ltr">{inv.customerPhone}</span></span>
                     </div>
                     <div className="text-left">
                       <div className="font-bold text-lg">{inv.totalAmount} د.ك</div>
