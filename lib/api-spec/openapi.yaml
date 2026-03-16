@@ -1,22 +1,41 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Kuwaiti Tailoring Shop SaaS API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication
+  - name: owner
+    description: Platform owner operations
+  - name: shops
+    description: Shop management
+  - name: customers
+    description: Customer management
+  - name: profiles
+    description: Customer profiles under same phone number
+  - name: measurements
+    description: Profile measurements
+  - name: invoices
+    description: Invoice management
+  - name: suborders
+    description: Sub-order management
+  - name: users
+    description: Shop user management
+  - name: export
+    description: Backup and export
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +43,686 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginBody"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Logout
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current user
+      responses:
+        "200":
+          description: Current user info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrentUser"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /owner/shops:
+    get:
+      operationId: listShops
+      tags: [owner]
+      summary: List all shops
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: ["string", "null"]
+            enum: [active, expired, suspended, null]
+        - name: area
+          in: query
+          schema:
+            type: ["string", "null"]
+      responses:
+        "200":
+          description: List of shops
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShopListResponse"
+    post:
+      operationId: createShop
+      tags: [owner]
+      summary: Create a new shop
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateShopBody"
+      responses:
+        "201":
+          description: Shop created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Shop"
+
+  /owner/shops/{shopId}:
+    get:
+      operationId: getShop
+      tags: [owner]
+      summary: Get shop details
+      parameters:
+        - name: shopId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Shop details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Shop"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateShop
+      tags: [owner]
+      summary: Update shop details
+      parameters:
+        - name: shopId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateShopBody"
+      responses:
+        "200":
+          description: Shop updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Shop"
+
+  /owner/stats:
+    get:
+      operationId: getOwnerStats
+      tags: [owner]
+      summary: Get platform statistics
+      responses:
+        "200":
+          description: Platform stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OwnerStats"
+
+  /shop/customers:
+    get:
+      operationId: listCustomers
+      tags: [customers]
+      summary: Search customers
+      parameters:
+        - name: phone
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: name
+          in: query
+          schema:
+            type: ["string", "null"]
+      responses:
+        "200":
+          description: Customer list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerListResponse"
+    post:
+      operationId: createCustomer
+      tags: [customers]
+      summary: Create a new customer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCustomerBody"
+      responses:
+        "201":
+          description: Customer created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+
+  /shop/customers/{customerId}:
+    get:
+      operationId: getCustomer
+      tags: [customers]
+      summary: Get customer with profiles
+      parameters:
+        - name: customerId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Customer details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerWithProfiles"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateCustomer
+      tags: [customers]
+      summary: Update customer
+      parameters:
+        - name: customerId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCustomerBody"
+      responses:
+        "200":
+          description: Customer updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+
+  /shop/customers/by-phone/{phone}:
+    get:
+      operationId: getCustomerByPhone
+      tags: [customers]
+      summary: Get customer by phone number
+      parameters:
+        - name: phone
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Customer with profiles
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerWithProfiles"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /shop/profiles:
+    post:
+      operationId: createProfile
+      tags: [profiles]
+      summary: Create a profile under a customer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProfileBody"
+      responses:
+        "201":
+          description: Profile created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Profile"
+
+  /shop/profiles/{profileId}:
+    get:
+      operationId: getProfile
+      tags: [profiles]
+      summary: Get profile with measurements
+      parameters:
+        - name: profileId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Profile details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfileWithMeasurements"
+    patch:
+      operationId: updateProfile
+      tags: [profiles]
+      summary: Update profile
+      parameters:
+        - name: profileId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProfileBody"
+      responses:
+        "200":
+          description: Profile updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Profile"
+
+  /shop/measurements/{profileId}:
+    put:
+      operationId: upsertMeasurements
+      tags: [measurements]
+      summary: Create or update measurements for a profile
+      parameters:
+        - name: profileId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpsertMeasurementsBody"
+      responses:
+        "200":
+          description: Measurements saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Measurements"
+
+  /shop/invoices:
+    get:
+      operationId: listInvoices
+      tags: [invoices]
+      summary: List invoices
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: ["string", "null"]
+            enum: [under_tailoring, ready, delivered, null]
+        - name: phone
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: invoiceNumber
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: readyForDelivery
+          in: query
+          schema:
+            type: ["boolean", "null"]
+      responses:
+        "200":
+          description: Invoice list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceListResponse"
+    post:
+      operationId: createInvoice
+      tags: [invoices]
+      summary: Create a new invoice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInvoiceBody"
+      responses:
+        "201":
+          description: Invoice created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceWithSubOrders"
+
+  /shop/invoices/{invoiceId}:
+    get:
+      operationId: getInvoice
+      tags: [invoices]
+      summary: Get invoice with sub-orders
+      parameters:
+        - name: invoiceId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Invoice details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceWithSubOrders"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateInvoice
+      tags: [invoices]
+      summary: Update invoice
+      parameters:
+        - name: invoiceId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateInvoiceBody"
+      responses:
+        "200":
+          description: Invoice updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceWithSubOrders"
+
+  /shop/invoices/{invoiceId}/deliver:
+    post:
+      operationId: markInvoiceDelivered
+      tags: [invoices]
+      summary: Mark invoice as delivered
+      parameters:
+        - name: invoiceId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Invoice delivered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceWithSubOrders"
+
+  /shop/invoices/{invoiceId}/whatsapp:
+    get:
+      operationId: getWhatsappMessage
+      tags: [invoices]
+      summary: Get WhatsApp ready message for invoice
+      parameters:
+        - name: invoiceId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: WhatsApp message text
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WhatsappMessageResponse"
+        "400":
+          description: Invoice not fully ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /shop/suborders:
+    post:
+      operationId: createSubOrder
+      tags: [suborders]
+      summary: Create a sub-order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSubOrderBody"
+      responses:
+        "201":
+          description: Sub-order created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubOrder"
+
+  /shop/suborders/{subOrderId}:
+    patch:
+      operationId: updateSubOrder
+      tags: [suborders]
+      summary: Update sub-order
+      parameters:
+        - name: subOrderId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSubOrderBody"
+      responses:
+        "200":
+          description: Sub-order updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubOrder"
+
+  /shop/suborders/{subOrderId}/ready:
+    post:
+      operationId: markSubOrderReady
+      tags: [suborders]
+      summary: Mark sub-order as ready
+      parameters:
+        - name: subOrderId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Sub-order marked ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubOrder"
+
+  /shop/dashboard:
+    get:
+      operationId: getShopDashboard
+      tags: [shops]
+      summary: Get shop dashboard stats
+      responses:
+        "200":
+          description: Dashboard stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShopDashboard"
+
+  /shop/tailor-queue:
+    get:
+      operationId: getTailorQueue
+      tags: [suborders]
+      summary: Get tailor work queue
+      responses:
+        "200":
+          description: Tailor queue
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TailorQueueResponse"
+
+  /shop/users:
+    get:
+      operationId: listShopUsers
+      tags: [users]
+      summary: List shop users (manager only)
+      responses:
+        "200":
+          description: Shop users
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShopUserListResponse"
+    post:
+      operationId: createShopUser
+      tags: [users]
+      summary: Create shop user (manager only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateShopUserBody"
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShopUser"
+
+  /shop/users/{userId}:
+    patch:
+      operationId: updateShopUser
+      tags: [users]
+      summary: Update shop user
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateShopUserBody"
+      responses:
+        "200":
+          description: User updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShopUser"
+    delete:
+      operationId: deleteShopUser
+      tags: [users]
+      summary: Delete shop user
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /shop/export/customers:
+    get:
+      operationId: exportCustomers
+      tags: [export]
+      summary: Export customers as JSON
+      responses:
+        "200":
+          description: Customer export
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExportResponse"
+
+  /shop/export/invoices:
+    get:
+      operationId: exportInvoices
+      tags: [export]
+      summary: Export invoices as JSON
+      responses:
+        "200":
+          description: Invoice export
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExportResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +733,814 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required:
+        - message
+
+    LoginBody:
+      type: object
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+      required:
+        - username
+        - password
+
+    LoginResponse:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/CurrentUser"
+        token:
+          type: string
+      required:
+        - user
+        - token
+
+    CurrentUser:
+      type: object
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        name:
+          type: string
+        role:
+          type: string
+          enum: [owner, shop_manager, reception, tailor]
+        shopId:
+          type: ["integer", "null"]
+        shopName:
+          type: ["string", "null"]
+      required:
+        - id
+        - username
+        - name
+        - role
+
+    Shop:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        managerName:
+          type: string
+        phone:
+          type: string
+        area:
+          type: string
+        subscriptionStart:
+          type: string
+          format: date
+        subscriptionEnd:
+          type: string
+          format: date
+        subscriptionStatus:
+          type: string
+          enum: [active, expired, suspended]
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - managerName
+        - phone
+        - area
+        - subscriptionStart
+        - subscriptionEnd
+        - subscriptionStatus
+        - createdAt
+
+    ShopListResponse:
+      type: object
+      properties:
+        shops:
+          type: array
+          items:
+            $ref: "#/components/schemas/Shop"
+      required:
+        - shops
+
+    CreateShopBody:
+      type: object
+      properties:
+        name:
+          type: string
+        managerName:
+          type: string
+        phone:
+          type: string
+        area:
+          type: string
+        subscriptionStart:
+          type: string
+          format: date
+        subscriptionEnd:
+          type: string
+          format: date
+        subscriptionStatus:
+          type: string
+          enum: [active, expired, suspended]
+        notes:
+          type: ["string", "null"]
+        managerUsername:
+          type: string
+        managerPassword:
+          type: string
+      required:
+        - name
+        - managerName
+        - phone
+        - area
+        - subscriptionStart
+        - subscriptionEnd
+        - subscriptionStatus
+        - managerUsername
+        - managerPassword
+
+    UpdateShopBody:
+      type: object
+      properties:
+        name:
+          type: ["string", "null"]
+        managerName:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        area:
+          type: ["string", "null"]
+        subscriptionStart:
+          type: ["string", "null"]
+          format: date
+        subscriptionEnd:
+          type: ["string", "null"]
+          format: date
+        subscriptionStatus:
+          type: ["string", "null"]
+          enum: [active, expired, suspended, null]
+        notes:
+          type: ["string", "null"]
+
+    OwnerStats:
+      type: object
+      properties:
+        totalShops:
+          type: integer
+        activeShops:
+          type: integer
+        expiredShops:
+          type: integer
+        suspendedShops:
+          type: integer
+        newThisMonth:
+          type: integer
+        shopsByArea:
+          type: array
+          items:
+            $ref: "#/components/schemas/AreaCount"
+      required:
+        - totalShops
+        - activeShops
+        - expiredShops
+        - suspendedShops
+        - newThisMonth
+        - shopsByArea
+
+    AreaCount:
+      type: object
+      properties:
+        area:
+          type: string
+        count:
+          type: integer
+      required:
+        - area
+        - count
+
+    Customer:
+      type: object
+      properties:
+        id:
+          type: integer
+        shopId:
+          type: integer
+        phone:
+          type: string
+        name:
+          type: string
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - shopId
+        - phone
+        - name
+        - createdAt
+
+    CustomerWithProfiles:
+      type: object
+      properties:
+        id:
+          type: integer
+        shopId:
+          type: integer
+        phone:
+          type: string
+        name:
+          type: string
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        profiles:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProfileWithMeasurements"
+      required:
+        - id
+        - shopId
+        - phone
+        - name
+        - createdAt
+        - profiles
+
+    CustomerListResponse:
+      type: object
+      properties:
+        customers:
+          type: array
+          items:
+            $ref: "#/components/schemas/Customer"
+      required:
+        - customers
+
+    CreateCustomerBody:
+      type: object
+      properties:
+        phone:
+          type: string
+        name:
+          type: string
+        notes:
+          type: ["string", "null"]
+      required:
+        - phone
+        - name
+
+    UpdateCustomerBody:
+      type: object
+      properties:
+        name:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+
+    Profile:
+      type: object
+      properties:
+        id:
+          type: integer
+        customerId:
+          type: integer
+        shopId:
+          type: integer
+        name:
+          type: string
+        isMain:
+          type: boolean
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - customerId
+        - shopId
+        - name
+        - isMain
+        - createdAt
+
+    ProfileWithMeasurements:
+      type: object
+      properties:
+        id:
+          type: integer
+        customerId:
+          type: integer
+        shopId:
+          type: integer
+        name:
+          type: string
+        isMain:
+          type: boolean
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        measurements:
+          $ref: "#/components/schemas/Measurements"
+      required:
+        - id
+        - customerId
+        - shopId
+        - name
+        - isMain
+        - createdAt
+
+    CreateProfileBody:
+      type: object
+      properties:
+        customerId:
+          type: integer
+        name:
+          type: string
+        isMain:
+          type: boolean
+        notes:
+          type: ["string", "null"]
+      required:
+        - customerId
+        - name
+        - isMain
+
+    UpdateProfileBody:
+      type: object
+      properties:
+        name:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+
+    Measurements:
+      type: object
+      properties:
+        id:
+          type: integer
+        profileId:
+          type: integer
+        length:
+          type: ["number", "null"]
+        shoulder:
+          type: ["number", "null"]
+        chest:
+          type: ["number", "null"]
+        sleeve:
+          type: ["number", "null"]
+        neck:
+          type: ["number", "null"]
+        modelNotes:
+          type: ["string", "null"]
+        generalNotes:
+          type: ["string", "null"]
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - profileId
+        - updatedAt
+
+    UpsertMeasurementsBody:
+      type: object
+      properties:
+        length:
+          type: ["number", "null"]
+        shoulder:
+          type: ["number", "null"]
+        chest:
+          type: ["number", "null"]
+        sleeve:
+          type: ["number", "null"]
+        neck:
+          type: ["number", "null"]
+        modelNotes:
+          type: ["string", "null"]
+        generalNotes:
+          type: ["string", "null"]
+
+    Invoice:
+      type: object
+      properties:
+        id:
+          type: integer
+        shopId:
+          type: integer
+        customerId:
+          type: integer
+        invoiceNumber:
+          type: string
+        customerName:
+          type: string
+        customerPhone:
+          type: string
+        status:
+          type: string
+          enum: [under_tailoring, ready, delivered]
+        totalAmount:
+          type: number
+        paidAmount:
+          type: number
+        remainingAmount:
+          type: number
+        notes:
+          type: ["string", "null"]
+        allSubOrdersReady:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        deliveredAt:
+          type: ["string", "null"]
+          format: date-time
+      required:
+        - id
+        - shopId
+        - customerId
+        - invoiceNumber
+        - customerName
+        - customerPhone
+        - status
+        - totalAmount
+        - paidAmount
+        - remainingAmount
+        - allSubOrdersReady
+        - createdAt
+
+    SubOrder:
+      type: object
+      properties:
+        id:
+          type: integer
+        invoiceId:
+          type: integer
+        shopId:
+          type: integer
+        profileId:
+          type: integer
+        profileName:
+          type: string
+        subOrderNumber:
+          type: string
+        quantity:
+          type: integer
+        fabricSource:
+          type: string
+          enum: [shop_fabric, customer_fabric]
+        fabricDescription:
+          type: ["string", "null"]
+        price:
+          type: number
+        paidAmount:
+          type: number
+        remainingAmount:
+          type: number
+        notes:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [under_tailoring, ready]
+        createdAt:
+          type: string
+          format: date-time
+        measurements:
+          $ref: "#/components/schemas/Measurements"
+      required:
+        - id
+        - invoiceId
+        - shopId
+        - profileId
+        - profileName
+        - subOrderNumber
+        - quantity
+        - fabricSource
+        - price
+        - paidAmount
+        - remainingAmount
+        - status
+        - createdAt
+
+    InvoiceWithSubOrders:
+      type: object
+      properties:
+        id:
+          type: integer
+        shopId:
+          type: integer
+        customerId:
+          type: integer
+        invoiceNumber:
+          type: string
+        customerName:
+          type: string
+        customerPhone:
+          type: string
+        status:
+          type: string
+          enum: [under_tailoring, ready, delivered]
+        totalAmount:
+          type: number
+        paidAmount:
+          type: number
+        remainingAmount:
+          type: number
+        notes:
+          type: ["string", "null"]
+        allSubOrdersReady:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        deliveredAt:
+          type: ["string", "null"]
+          format: date-time
+        subOrders:
+          type: array
+          items:
+            $ref: "#/components/schemas/SubOrder"
+      required:
+        - id
+        - shopId
+        - customerId
+        - invoiceNumber
+        - customerName
+        - customerPhone
+        - status
+        - totalAmount
+        - paidAmount
+        - remainingAmount
+        - allSubOrdersReady
+        - createdAt
+        - subOrders
+
+    InvoiceListResponse:
+      type: object
+      properties:
+        invoices:
+          type: array
+          items:
+            $ref: "#/components/schemas/Invoice"
+      required:
+        - invoices
+
+    CreateInvoiceBody:
+      type: object
+      properties:
+        customerId:
+          type: integer
+        notes:
+          type: ["string", "null"]
+        subOrders:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreateSubOrderInput"
+      required:
+        - customerId
+        - subOrders
+
+    CreateSubOrderInput:
+      type: object
+      properties:
+        profileId:
+          type: integer
+        quantity:
+          type: integer
+        fabricSource:
+          type: string
+          enum: [shop_fabric, customer_fabric]
+        fabricDescription:
+          type: ["string", "null"]
+        price:
+          type: number
+        paidAmount:
+          type: number
+        notes:
+          type: ["string", "null"]
+      required:
+        - profileId
+        - quantity
+        - fabricSource
+        - price
+        - paidAmount
+
+    CreateSubOrderBody:
+      type: object
+      properties:
+        invoiceId:
+          type: integer
+        profileId:
+          type: integer
+        quantity:
+          type: integer
+        fabricSource:
+          type: string
+          enum: [shop_fabric, customer_fabric]
+        fabricDescription:
+          type: ["string", "null"]
+        price:
+          type: number
+        paidAmount:
+          type: number
+        notes:
+          type: ["string", "null"]
+      required:
+        - invoiceId
+        - profileId
+        - quantity
+        - fabricSource
+        - price
+        - paidAmount
+
+    UpdateInvoiceBody:
+      type: object
+      properties:
+        notes:
+          type: ["string", "null"]
+        paidAmount:
+          type: ["number", "null"]
+
+    UpdateSubOrderBody:
+      type: object
+      properties:
+        quantity:
+          type: ["integer", "null"]
+        fabricSource:
+          type: ["string", "null"]
+          enum: [shop_fabric, customer_fabric, null]
+        fabricDescription:
+          type: ["string", "null"]
+        price:
+          type: ["number", "null"]
+        paidAmount:
+          type: ["number", "null"]
+        notes:
+          type: ["string", "null"]
+
+    ShopDashboard:
+      type: object
+      properties:
+        underTailoring:
+          type: integer
+        readyForDelivery:
+          type: integer
+        deliveredToday:
+          type: integer
+        totalDelivered:
+          type: integer
+      required:
+        - underTailoring
+        - readyForDelivery
+        - deliveredToday
+        - totalDelivered
+
+    TailorQueueItem:
+      type: object
+      properties:
+        invoiceId:
+          type: integer
+        invoiceNumber:
+          type: string
+        customerName:
+          type: string
+        customerPhone:
+          type: string
+        subOrders:
+          type: array
+          items:
+            $ref: "#/components/schemas/SubOrder"
+      required:
+        - invoiceId
+        - invoiceNumber
+        - customerName
+        - customerPhone
+        - subOrders
+
+    TailorQueueResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/TailorQueueItem"
+      required:
+        - items
+
+    WhatsappMessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        invoiceNumber:
+          type: string
+        remainingAmount:
+          type: number
+      required:
+        - message
+        - invoiceNumber
+        - remainingAmount
+
+    ShopUser:
+      type: object
+      properties:
+        id:
+          type: integer
+        shopId:
+          type: integer
+        username:
+          type: string
+        name:
+          type: string
+        role:
+          type: string
+          enum: [shop_manager, reception, tailor]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - shopId
+        - username
+        - name
+        - role
+        - createdAt
+
+    ShopUserListResponse:
+      type: object
+      properties:
+        users:
+          type: array
+          items:
+            $ref: "#/components/schemas/ShopUser"
+      required:
+        - users
+
+    CreateShopUserBody:
+      type: object
+      properties:
+        username:
+          type: string
+        name:
+          type: string
+        password:
+          type: string
+        role:
+          type: string
+          enum: [shop_manager, reception, tailor]
+      required:
+        - username
+        - name
+        - password
+        - role
+
+    UpdateShopUserBody:
+      type: object
+      properties:
+        name:
+          type: ["string", "null"]
+        password:
+          type: ["string", "null"]
+        role:
+          type: ["string", "null"]
+          enum: [shop_manager, reception, tailor, null]
+
+    ExportResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+        exportedAt:
+          type: string
+          format: date-time
+        count:
+          type: integer
+      required:
+        - data
+        - exportedAt
+        - count

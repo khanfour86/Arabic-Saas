@@ -1,0 +1,422 @@
+Build a production-ready, mobile-first, Arabic RTL SaaS web application for Kuwaiti men’s tailoring shops (dishdasha tailoring shops).
+
+PROJECT OVERVIEW
+This platform is for tailoring shops only, not for end customers.
+The app manages customer measurements, invoices, tailoring workflow, readiness status, delivery status, and backup/export.
+The interface must be very simple, fast, and practical for real shop usage.
+Do NOT overcomplicate the UI or add unnecessary enterprise features.
+
+IMPORTANT PRODUCT PRINCIPLES
+- Arabic UI only
+- RTL layout
+- Mobile-first design, but also fully usable on desktop
+- Simple and fast workflow for shop employees
+- Use clear large buttons and large Arabic labels
+- The app should feel like an operational tool, not an accounting system
+- Focus on speed and ease of daily use
+- Keep code clean and modular for future expansion
+
+MULTI-TENANT SAAS ARCHITECTURE
+This is a SaaS platform with two levels:
+
+1) Platform Owner Level
+This is for the platform owner only.
+The platform owner does NOT manage shop customers or shop operational data.
+The platform owner only manages shops as clients of the SaaS business.
+
+2) Shop Level
+Each tailoring shop has its own workspace and only accesses its own operational data.
+
+DATABASE ARCHITECTURE
+Use a single SQL database with strict tenant isolation using shop_id.
+Do NOT create separate physical databases per shop.
+Every shop-related table must include shop_id.
+Enforce tenant isolation on every non-owner query.
+
+PLATFORM OWNER DASHBOARD REQUIREMENTS
+Create a dedicated Owner Dashboard with no access to shop customers, measurements, invoices, or tailoring details.
+
+Owner dashboard should include:
+- Create a new shop
+- View all shops
+- View active shops
+- View expired shops
+- View shop regions/areas
+- View general statistics about shops as clients
+- Show total number of shops
+- Show active shops count
+- Show expired shops count
+- Show newly added shops count
+- Show shop distribution by area/region
+- Show subscription start and end dates
+- Show subscription status
+- Allow updating shop subscription status
+- Allow opening shop profile page (administrative profile only, not operational customer data)
+
+SHOP DATA FIELDS
+Each shop should have:
+- shop name
+- manager/owner name
+- contact phone
+- area/region
+- subscription start date
+- subscription end date
+- subscription status (active / expired / suspended)
+- notes
+
+SHOP USER ROLES
+Inside each shop, create exactly these 3 roles:
+
+1) Shop Manager
+Full access inside the shop only.
+Can:
+- manage customers
+- manage profiles under phone number
+- manage measurements
+- create and view invoices
+- manage users inside the shop
+- export backup
+- view all operational data inside that shop
+
+2) Reception User
+Can:
+- search by phone number
+- search by invoice number
+- create a new invoice
+- open an existing customer
+- add a new customer
+- edit and confirm measurements during order taking
+- create orders for main customer and children under the same phone number
+- see invoice details
+- see which invoices are fully ready for delivery
+- prepare/send WhatsApp-ready message text when full invoice is ready
+- complete delivery
+
+Cannot:
+- manage users
+- export backup
+- access owner dashboard
+- access other shops
+
+3) Tailor User
+Can:
+- view tailoring work queue
+- open invoice details
+- view all sub-orders under an invoice
+- view measurements for each sub-order
+- mark each sub-order as ready
+
+Cannot:
+- manage customers
+- create invoices
+- send WhatsApp
+- export backup
+- access other shops
+
+CUSTOMER MODEL
+The primary identifier for each customer record is phone number.
+
+Each customer record contains:
+- phone number
+- main customer name
+- notes
+
+Under the same phone number, there can be multiple profiles:
+- the main customer
+- children or additional names under the same phone number
+
+Do NOT make this too complex in the UI.
+The workflow should stay simple.
+
+PROFILE MODEL UNDER SAME PHONE NUMBER
+Each phone number can have multiple names/profiles:
+- one main customer profile
+- additional profiles (usually sons/children)
+
+Each profile has its own:
+- name
+- measurements
+- notes
+
+MEASUREMENTS FIELDS
+Create these standard fields for each profile:
+- length
+- shoulder
+- chest
+- sleeve
+- neck
+- model notes
+- general notes
+
+INVOICE MODEL
+Each visit/order session creates one main invoice number.
+Example:
+1052
+
+Under the same invoice there are multiple sub-orders:
+1052-1
+1052-2
+1052-3
+
+This is very important.
+
+SUB-ORDER MODEL
+Each sub-order is linked to one profile under the same phone number.
+
+Example:
+Invoice 1052
+- 1052-1 for main customer
+- 1052-2 for son Mohammed
+- 1052-3 for son Khaled
+
+Each sub-order must contain:
+- sub-order number
+- linked profile
+- quantity of dishdashas
+- fabric source (shop fabric / customer fabric)
+- fabric description
+- price
+- paid amount
+- remaining amount
+- notes
+- status (under tailoring / ready)
+
+VERY IMPORTANT ORDER NUMBERING RULE
+Main invoice number is one number like:
+1052
+
+Sub-orders must be auto-generated under that invoice:
+1052-1
+1052-2
+1052-3
+
+This numbering is essential because reception must write each sub-order number on the fabric bag, especially when the fabric is supplied by the customer.
+Tailor must clearly see these sub-order numbers to avoid mixing fabrics.
+
+WORKFLOW INSIDE THE SHOP
+Reception workflow:
+1) Enter customer phone number
+2) If customer exists, load main customer and profiles under same number
+3) If customer does not exist, create new customer and main profile
+4) Start building one invoice
+5) First confirm the main customer order
+6) Then select an existing child profile OR create a new profile under the same phone number
+7) Confirm each profile’s order one by one
+8) All confirmed profile orders stay under one invoice
+9) Save invoice and send it to tailoring queue
+
+TAILOR WORKFLOW
+Tailor opens invoice and sees all sub-orders separately.
+Tailor should see:
+- invoice number
+- sub-order number
+- profile name
+- measurements
+- quantity
+- fabric source
+- fabric description
+- notes
+
+Tailor marks each sub-order individually as ready.
+
+VERY IMPORTANT READY STATUS LOGIC
+A full invoice should NOT appear in the reception “Ready for Delivery” list until ALL sub-orders under that invoice are marked ready.
+
+Example:
+Invoice 1052 has:
+- 1052-1 ready
+- 1052-2 not ready
+- 1052-3 not ready
+
+In this case:
+- reception should NOT see invoice 1052 in “Ready for Delivery” list
+- but if reception searches manually, they should still be able to see detailed status of each sub-order
+
+This is required because:
+- The official WhatsApp message should only be sent when the full invoice is ready
+- But staff should still be able to answer customer inquiries precisely
+
+CUSTOMER INQUIRY LOGIC
+Reception must be able to search by:
+- phone number
+- invoice number
+
+When they open an invoice, they should see detailed readiness of each sub-order.
+Example:
+- main customer ready
+- Mohammed not ready
+- Khaled not ready
+
+DELIVERY LOGIC
+Only when all sub-orders are ready:
+- the invoice becomes “Ready for Delivery”
+- the invoice appears in reception ready list
+- reception can then send WhatsApp-ready message text
+- reception can mark invoice as delivered
+
+WHATSAPP MESSAGE LOGIC
+Do not implement a complex WhatsApp API integration now.
+Instead, prepare a WhatsApp-ready message text and a simple button/copy action.
+
+Message example in Arabic:
+"عميلنا الكريم، تم الانتهاء من الطلب رقم 1052. يمكنكم الاستلام من المحل. المبلغ المتبقي: 10 د.ك"
+
+Only enable this when the full invoice is ready.
+
+BACKUP / EXPORT REQUIREMENTS
+This is very important.
+
+Shop Manager must be able to export backup at any time.
+Data belongs to the shop.
+
+Create an export page for Shop Manager with:
+- export customers
+- export profiles
+- export measurements
+- export invoices
+- export sub-orders
+- export payment-related data
+
+Provide export formats:
+1) CSV / Excel-friendly export
+2) Structured JSON backup export
+
+Owner should NOT access the contents of shop backups by default from the platform dashboard.
+
+SEARCH REQUIREMENTS
+Search must support:
+- phone number
+- invoice number
+
+Search should be fast and prominent in the UI.
+
+PAGES REQUIRED
+
+PLATFORM OWNER PAGES
+- Owner login
+- Owner dashboard
+- Shops list
+- Create shop page
+- Shop administrative profile page
+- Subscription status page / controls
+- Basic analytics page
+
+SHOP PAGES
+- Shop login
+- Shop dashboard
+- Customer search / create page
+- Customer detail page with profiles under same phone number
+- Invoice creation page
+- Invoice detail page
+- Tailor work queue page
+- Ready for delivery page
+- Backup / export page
+- User management page (manager only)
+
+SHOP DASHBOARD CONTENT
+Create a simple dashboard for shop users.
+For shop manager / reception, show useful operational stats like:
+- number of invoices under tailoring
+- number of invoices fully ready for delivery
+- number of delivered invoices
+- quick search input
+- quick create invoice button
+
+TAILOR DASHBOARD CONTENT
+Tailor queue should be very simple:
+- list of invoices with sub-orders
+- open invoice
+- mark sub-order ready
+
+OWNER DASHBOARD CONTENT
+Show general business stats only about shops:
+- total shops
+- active shops
+- expired shops
+- newly added shops
+- shops by area/region
+
+ACCESS CONTROL REQUIREMENTS
+Implement strong role-based access control:
+- owner only sees owner dashboard and shop administrative records
+- shop manager sees full shop operational data for own shop only
+- reception sees allowed operational screens for own shop only
+- tailor sees tailoring queue for own shop only
+- no one can access another shop’s data
+
+TECH STACK
+Use a modern stack that works well on Replit.
+Preferred:
+- Next.js
+- TypeScript
+- Tailwind CSS
+- Prisma ORM
+- PostgreSQL or Replit SQL-compatible production database
+- Simple auth with role-based authorization
+- Clean modular architecture
+
+If Prisma setup becomes difficult on Replit, choose a simpler reliable SQL stack that is production-friendly.
+
+UI / UX REQUIREMENTS
+- Arabic only
+- RTL
+- clean professional design
+- mobile-first
+- simple cards, tables, and forms
+- avoid clutter
+- large clear action buttons
+- large readable Arabic typography
+- keep forms fast and practical
+
+SEED DATA
+Add realistic demo seed data:
+- 2 or 3 shops
+- one owner account
+- one shop manager
+- one reception user
+- one tailor user
+- demo customers
+- demo invoices with sub-orders
+
+AUTHENTICATION
+Create separate auth logic / routing for:
+- platform owner
+- shop users
+
+Or one auth system with role-based redirect after login.
+
+DELIVERABLES
+Build the full app structure, database schema, seed data, and main pages.
+Generate clean code and make sure the project runs on Replit.
+
+Also provide:
+1) database schema
+2) clear folder structure
+3) setup instructions
+4) demo login credentials
+5) notes for future expansion
+
+IMPORTANT FUTURE-READY NOTES
+Design the code so future features can be added later, such as:
+- delivery service
+- inventory / supplies
+- fabric offers
+- threads/buttons/bags supplier marketplace
+- advanced subscription billing
+
+But do NOT implement these future features now.
+
+WHAT NOT TO ADD NOW
+Do NOT add:
+- customer-facing app
+- advanced accounting system
+- payroll
+- activity log
+- complicated analytics inside shops
+- complex WhatsApp API integration
+- barcode system unless very easy to scaffold
+- overcomplicated ERP features
+
+FINAL PRIORITY
+The app must feel practical for real tailoring shops in Kuwait.
+Speed, clarity, and simplicity are more important than fancy features.

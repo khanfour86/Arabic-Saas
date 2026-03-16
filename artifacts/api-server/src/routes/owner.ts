@@ -1,0 +1,115 @@
+import { Router, type IRouter } from "express";
+import { db, shopsTable, usersTable } from "@workspace/db";
+import { eq, and } from "drizzle-orm";
+import { CreateShopBody, UpdateShopBody } from "@workspace/api-zod";
+import { requireAuth, requireOwner, hashPassword } from "../lib/auth";
+
+const router: IRouter = Router();
+
+router.get("/owner/shops", requireAuth, requireOwner, async (req, res): Promise<void> => {
+  const { status, area } = req.query as { status?: string; area?: string };
+
+  const conditions = [];
+  if (status && status !== "null") {
+    conditions.push(eq(shopsTable.subscriptionStatus, status));
+  }
+  if (area && area !== "null") {
+    conditions.push(eq(shopsTable.area, area));
+  }
+
+  const shops = conditions.length > 0
+    ? await db.select().from(shopsTable).where(and(...conditions)).orderBy(shopsTable.createdAt)
+    : await db.select().from(shopsTable).orderBy(shopsTable.createdAt);
+
+  res.json({ shops });
+});
+
+router.post("/owner/shops", requireAuth, requireOwner, async (req, res): Promise<void> => {
+  const parsed = CreateShopBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const { managerUsername, managerPassword, ...shopData } = parsed.data;
+
+  const [shop] = await db.insert(shopsTable).values({
+    name: shopData.name,
+    managerName: shopData.managerName,
+    phone: shopData.phone,
+    area: shopData.area,
+    subscriptionStart: shopData.subscriptionStart,
+    subscriptionEnd: shopData.subscriptionEnd,
+    subscriptionStatus: shopData.subscriptionStatus,
+    notes: shopData.notes,
+  }).returning();
+
+  await db.insert(usersTable).values({
+    shopId: shop.id,
+    username: managerUsername,
+    passwordHash: hashPassword(managerPassword),
+    name: shopData.managerName,
+    role: "shop_manager",
+  });
+
+  res.status(201).json(shop);
+});
+
+router.get("/owner/shops/:shopId", requireAuth, requireOwner, async (req, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.shopId) ? req.params.shopId[0] : req.params.shopId, 10);
+  const [shop] = await db.select().from(shopsTable).where(eq(shopsTable.id, id));
+  if (!shop) {
+    res.status(404).json({ error: "المحل غير موجود" });
+    return;
+  }
+  res.json(shop);
+});
+
+router.patch("/owner/shops/:shopId", requireAuth, requireOwner, async (req, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.shopId) ? req.params.shopId[0] : req.params.shopId, 10);
+  const parsed = UpdateShopBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const updateData: Record<string, any> = {};
+  const d = parsed.data;
+  if (d.name != null) updateData.name = d.name;
+  if (d.managerName != null) updateData.managerName = d.managerName;
+  if (d.phone != null) updateData.phone = d.phone;
+  if (d.area != null) updateData.area = d.area;
+  if (d.subscriptionStart != null) updateData.subscriptionStart = d.subscriptionStart;
+  if (d.subscriptionEnd != null) updateData.subscriptionEnd = d.subscriptionEnd;
+  if (d.subscriptionStatus != null) updateData.subscriptionStatus = d.subscriptionStatus;
+  if (d.notes !== undefined) updateData.notes = d.notes;
+
+  const [shop] = await db.update(shopsTable).set(updateData).where(eq(shopsTable.id, id)).returning();
+  if (!shop) {
+    res.status(404).json({ error: "المحل غير موجود" });
+    return;
+  }
+  res.json(shop);
+});
+
+router.get("/owner/stats", requireAuth, requireOwner, async (_req, res): Promise<void> => {
+  const allShops = await db.select().from(shopsTable);
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  const totalShops = allShops.length;
+  const activeShops = allShops.filter(s => s.subscriptionStatus === "active").length;
+  const expiredShops = allShops.filter(s => s.subscriptionStatus === "expired").length;
+  const suspendedShops = allShops.filter(s => s.subscriptionStatus === "suspended").length;
+  const newThisMonth = allShops.filter(s => new Date(s.createdAt) >= startOfMonth).length;
+
+  const areaMap = new Map<string, number>();
+  for (const shop of allShops) {
+    areaMap.set(shop.area, (areaMap.get(shop.area) || 0) + 1);
+  }
+  const shopsByArea = Array.from(areaMap.entries()).map(([area, count]) => ({ area, count }));
+
+  res.json({ totalShops, activeShops, expiredShops, suspendedShops, newThisMonth, shopsByArea });
+});
+
+export default router;

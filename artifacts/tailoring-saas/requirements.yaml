@@ -1,0 +1,19 @@
+packages:
+  "framer-motion": "Animations and page transitions"
+  "recharts": "Analytics charts for owner dashboard"
+  "date-fns": "Date formatting"
+  "lucide-react": "Icons"
+
+images:
+  - path: "artifacts/tailoring-saas/public/images/auth-bg.png"
+    description: "Elegant abstract background with dark navy blue and subtle gold accents, premium luxury feel, subtle geometric patterns resembling tailoring threads or fabric textures"
+    aspect_ratio: "16:9"
+  - path: "artifacts/tailoring-saas/public/images/logo-mark.png"
+    description: "Minimalist luxury logo mark for a Kuwaiti tailoring shop, abstract geometric shape in gold on transparent background"
+    aspect_ratio: "1:1"
+
+notes:
+  - JWT Auth token is stored in localStorage as 'auth_token'
+  - Fetch interceptor is implemented in App.tsx to append Authorization header to all requests
+  - RTL Layout is enforced via dir="rtl" on the root App container
+  - Using generated Orval TanStack Query hooks from @workspace/api-client-react
