@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { User, Phone, Plus, Loader2, FilePlus, Save, Ruler } from 'lucide-react';
+import { User, Phone, Plus, Loader2, FilePlus, Save, Ruler, StickyNote, Scissors } from 'lucide-react';
 import { Link, useParams } from 'wouter';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
@@ -69,30 +69,47 @@ export function CustomerDetail() {
                 </div>
               </div>
 
-              <div className="bg-muted/30 rounded-xl p-4 mb-6">
+              <div className="bg-muted/30 rounded-xl p-4 mb-4 space-y-4">
                 {profile.measurements ? (
-                  <div className="grid grid-cols-5 gap-2 text-center text-sm">
-                    <div className="bg-white p-2 rounded-lg shadow-sm">
-                      <div className="text-muted-foreground text-xs mb-1">الطول</div>
-                      <div className="font-bold">{profile.measurements.length || '-'}</div>
+                  <>
+                    {/* Measurement numbers */}
+                    <div className="grid grid-cols-5 gap-2 text-center text-sm">
+                      {[
+                        { label: 'الطول', value: profile.measurements.length },
+                        { label: 'الكتف', value: profile.measurements.shoulder },
+                        { label: 'الصدر', value: profile.measurements.chest },
+                        { label: 'الكم',   value: profile.measurements.sleeve },
+                        { label: 'الياقة', value: profile.measurements.neck },
+                      ].map(({ label, value }) => (
+                        <div key={label} className="bg-white p-2 rounded-lg shadow-sm">
+                          <div className="text-muted-foreground text-xs mb-1">{label}</div>
+                          <div className="font-bold text-primary">{value ?? '-'}</div>
+                        </div>
+                      ))}
                     </div>
-                    <div className="bg-white p-2 rounded-lg shadow-sm">
-                      <div className="text-muted-foreground text-xs mb-1">الكتف</div>
-                      <div className="font-bold">{profile.measurements.shoulder || '-'}</div>
-                    </div>
-                    <div className="bg-white p-2 rounded-lg shadow-sm">
-                      <div className="text-muted-foreground text-xs mb-1">الصدر</div>
-                      <div className="font-bold">{profile.measurements.chest || '-'}</div>
-                    </div>
-                    <div className="bg-white p-2 rounded-lg shadow-sm">
-                      <div className="text-muted-foreground text-xs mb-1">الكم</div>
-                      <div className="font-bold">{profile.measurements.sleeve || '-'}</div>
-                    </div>
-                    <div className="bg-white p-2 rounded-lg shadow-sm">
-                      <div className="text-muted-foreground text-xs mb-1">الياقة</div>
-                      <div className="font-bold">{profile.measurements.neck || '-'}</div>
-                    </div>
-                  </div>
+
+                    {/* Model notes */}
+                    {profile.measurements.modelNotes && (
+                      <div className="bg-accent/10 border border-accent/20 rounded-xl p-3 flex gap-2 items-start">
+                        <Scissors className="w-4 h-4 text-accent-foreground mt-0.5 shrink-0" />
+                        <div>
+                          <div className="text-xs font-bold text-accent-foreground mb-0.5">ملاحظات الموديل</div>
+                          <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{profile.measurements.modelNotes}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* General notes */}
+                    {profile.measurements.generalNotes && (
+                      <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 flex gap-2 items-start">
+                        <StickyNote className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
+                        <div>
+                          <div className="text-xs font-bold text-blue-600 mb-0.5">ملاحظات عامة</div>
+                          <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{profile.measurements.generalNotes}</p>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <div className="text-center py-4 text-muted-foreground flex flex-col items-center gap-2">
                     <Ruler className="w-6 h-6 opacity-50" />
