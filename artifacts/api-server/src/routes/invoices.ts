@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, invoicesTable, subOrdersTable, customersTable, profilesTable, measurementsTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { type AuthUser } from "../lib/auth";
 import { isShopUser, isManagerOrReception } from "../lib/shopMiddleware";
 
@@ -91,7 +91,7 @@ router.get("/shop/invoices", isShopUser, async (req, res): Promise<void> => {
 
   let allInvoices = await db.select().from(invoicesTable)
     .where(eq(invoicesTable.shopId, user.shopId!))
-    .orderBy(invoicesTable.createdAt);
+    .orderBy(desc(invoicesTable.createdAt));
 
   if (cleanStatus) {
     allInvoices = allInvoices.filter(i => i.status === cleanStatus);
