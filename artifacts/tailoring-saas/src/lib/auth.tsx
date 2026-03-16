@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useGetMe, CurrentUser } from '@workspace/api-client-react';
 
 interface AuthContextType {
@@ -19,7 +20,8 @@ const AuthContext = createContext<AuthContextType>({
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('auth_token'));
-  
+  const queryClient = useQueryClient();
+
   const { data: user, isLoading, error, refetch } = useGetMe({
     query: {
       enabled: !!token,
@@ -29,7 +31,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (error) {
-      logout();
+      doLogout();
     }
   }, [error]);
 
@@ -39,9 +41,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     refetch();
   };
 
-  const logout = () => {
+  const doLogout = () => {
     localStorage.removeItem('auth_token');
     setToken(null);
+    queryClient.clear();
+  };
+
+  const logout = () => {
+    doLogout();
+    window.location.href = '/login';
   };
 
   return (
