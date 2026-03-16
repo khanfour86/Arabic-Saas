@@ -103,8 +103,16 @@ router.get("/shop/invoices", isShopUser, async (req, res): Promise<void> => {
   const invoices = [];
   for (const inv of allInvoices) {
     const [customer] = await db.select().from(customersTable).where(eq(customersTable.id, inv.customerId));
-    if (cleanPhone && customer && !customer.phone.includes(cleanPhone)) continue;
-    if (cleanInvoiceNumber && !inv.invoiceNumber.includes(cleanInvoiceNumber)) continue;
+    // When both phone and invoiceNumber arrive together (OR search from the UI)
+    // show the invoice if it matches either; otherwise apply each filter independently
+    if (cleanPhone && cleanInvoiceNumber) {
+      const phoneMatch = customer?.phone.includes(cleanPhone) ?? false;
+      const invoiceMatch = inv.invoiceNumber.includes(cleanInvoiceNumber);
+      if (!phoneMatch && !invoiceMatch) continue;
+    } else {
+      if (cleanPhone && !(customer?.phone.includes(cleanPhone) ?? false)) continue;
+      if (cleanInvoiceNumber && !inv.invoiceNumber.includes(cleanInvoiceNumber)) continue;
+    }
 
     const subOrders = await getSubOrdersForInvoice(user.shopId!, inv.id);
     const totalAmount = subOrders.reduce((s, so) => s + so.price, 0);

@@ -23,17 +23,15 @@ export function InvoicesList() {
   }, [search]);
 
   const isNumeric = debouncedSearch.length > 0 && /^\d+$/.test(debouncedSearch);
-  // Invoice numbers are 4 digits (1001+), phone numbers are 8 digits
-  // Use length to decide: ≤4 digits → invoice number, ≥5 digits → phone partial match
-  const isPhoneSearch = isNumeric && debouncedSearch.length >= 5;
-  const isInvoiceSearch = isNumeric && debouncedSearch.length <= 4;
 
-  // Build a clean params object with no undefined values to get correct React Query cache keys
+  // Send both phone + invoiceNumber when input is digits — server returns OR match
   const invoiceParams = (() => {
     const p: Record<string, string> = {};
     if (statusFilter !== 'all') p.status = statusFilter;
-    if (isPhoneSearch) p.phone = debouncedSearch;
-    if (isInvoiceSearch) p.invoiceNumber = debouncedSearch;
+    if (isNumeric) {
+      p.phone = debouncedSearch;
+      p.invoiceNumber = debouncedSearch;
+    }
     return Object.keys(p).length > 0 ? p : undefined;
   })();
 
