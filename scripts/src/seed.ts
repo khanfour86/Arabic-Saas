@@ -31,7 +31,7 @@ async function seed() {
   const [shop1] = await db.insert(shopsTable).values({
     name: "محل الكويت للدشاديش",
     managerName: "أحمد محمد العتيبي",
-    phone: "96550001234",
+    phone: "50001234",
     area: "الكويت",
     subscriptionStart: todayStr,
     subscriptionEnd: nextYearStr,
@@ -42,7 +42,7 @@ async function seed() {
   const [shop2] = await db.insert(shopsTable).values({
     name: "محل الخيوط الذهبية",
     managerName: "خالد عبدالله الشمري",
-    phone: "96555009876",
+    phone: "55009876",
     area: "حولي",
     subscriptionStart: todayStr,
     subscriptionEnd: nextYearStr,
@@ -53,7 +53,7 @@ async function seed() {
   const [shop3] = await db.insert(shopsTable).values({
     name: "محل النخبة للخياطة",
     managerName: "سالم يوسف الرشيدي",
-    phone: "96566001122",
+    phone: "66001122",
     area: "الفروانية",
     subscriptionStart: todayStr,
     subscriptionEnd: new Date(today.getFullYear() - 1, today.getMonth(), today.getDate()).toISOString().split("T")[0],
@@ -102,21 +102,21 @@ async function seed() {
 
   const [cust1] = await db.insert(customersTable).values({
     shopId: shop1.id,
-    phone: "96550011111",
+    phone: "50011111",
     name: "عبدالله ناصر الكندري",
     notes: "عميل مميز",
   }).returning();
 
   const [cust2] = await db.insert(customersTable).values({
     shopId: shop1.id,
-    phone: "96555022222",
+    phone: "55022222",
     name: "فيصل حمد السبيعي",
     notes: "",
   }).returning();
 
   const [cust3] = await db.insert(customersTable).values({
     shopId: shop1.id,
-    phone: "96566033333",
+    phone: "66033333",
     name: "سعود عبدالرحمن العازمي",
     notes: "يفضل القماش الأبيض دائماً",
   }).returning();
