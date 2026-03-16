@@ -194,7 +194,7 @@ function CustomerCreateDialog({ trigger, initialPhone = '' }: { trigger?: React.
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) setPhone(initialPhone); }}>
       <DialogTrigger asChild>
         {trigger || (
           <Button className="bg-primary text-white hover:bg-primary/90 shadow-lg rounded-xl gap-2 h-12 px-6">
@@ -212,23 +212,25 @@ function CustomerCreateDialog({ trigger, initialPhone = '' }: { trigger?: React.
             <Input name="name" required className="bg-muted/50 rounded-xl h-12" placeholder="الاسم الكامل" />
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-bold">رقم الهاتف (8 أرقام)</label>
-            <div className="relative">
-              <Input
-                name="phone"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 8))}
-                required
-                className="bg-muted/50 rounded-xl h-12 font-mono text-lg tracking-widest"
-                dir="ltr"
-                placeholder="99887766"
-                maxLength={8}
-                inputMode="numeric"
-              />
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
-                {phone.length}/8
+            <div className="flex justify-between items-center">
+              <label className="text-sm font-bold">رقم الهاتف</label>
+              <span className={`text-xs font-mono ${phone.length === 8 ? 'text-green-600 font-bold' : 'text-muted-foreground'}`}>
+                {phone.length} / 8
               </span>
             </div>
+            <Input
+              name="phone"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 8))}
+              required
+              className="bg-muted/50 rounded-xl h-12 font-mono text-xl tracking-widest"
+              dir="ltr"
+              placeholder="XXXXXXXX"
+              maxLength={8}
+              inputMode="numeric"
+              autoComplete="off"
+            />
+            <p className="text-xs text-muted-foreground">أرقام فقط — بدون رمز الدولة (965)</p>
           </div>
           <div className="space-y-2">
             <label className="text-sm font-bold">ملاحظات (اختياري)</label>
