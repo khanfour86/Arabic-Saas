@@ -9,60 +9,44 @@ import { Link, useLocation } from 'wouter';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 
+function buildParams(search: string) {
+  if (!search) return undefined;
+  if (/^\d+$/.test(search)) return { phone: search };
+  return { name: search };
+}
+
 export function CustomersList() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [showDropdown, setShowDropdown] = useState(false);
+  const [inputFocused, setInputFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [, setLocation] = useLocation();
 
-  // Debounce search input
   useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(search), 250);
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
     return () => clearTimeout(timer);
   }, [search]);
 
-  const isPhoneSearch = debouncedSearch.length > 0 && /^\d+$/.test(debouncedSearch);
-  const isNameSearch = debouncedSearch.length > 0 && !/^\d+$/.test(debouncedSearch);
+  const { data, isLoading } = useListCustomers(buildParams(debouncedSearch));
 
-  // Main list query (debounced)
-  const { data, isLoading } = useListCustomers({
-    phone: isPhoneSearch ? debouncedSearch : undefined,
-    name: isNameSearch ? debouncedSearch : undefined,
-  });
+  const customers = data?.customers ?? [];
+  const showDropdown = inputFocused && search.length > 0 && customers.length > 0;
 
-  // Live autocomplete query for phone (faster, on current search value)
-  const [liveSearch, setLiveSearch] = useState('');
-  useEffect(() => {
-    const timer = setTimeout(() => setLiveSearch(search), 150);
-    return () => clearTimeout(timer);
-  }, [search]);
-
-  const isLivePhone = liveSearch.length >= 2 && /^\d+$/.test(liveSearch);
-  const { data: autocompleteData } = useListCustomers(
-    { phone: isLivePhone ? liveSearch : undefined },
-    { query: { enabled: isLivePhone } }
-  );
-
-  const suggestions = isLivePhone ? (autocompleteData?.customers ?? []) : [];
-
-  // Close dropdown on outside click
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
       if (
-        dropdownRef.current && !dropdownRef.current.contains(e.target as Node) &&
-        inputRef.current && !inputRef.current.contains(e.target as Node)
-      ) {
-        setShowDropdown(false);
-      }
+        dropdownRef.current?.contains(e.target as Node) ||
+        inputRef.current?.contains(e.target as Node)
+      ) return;
+      setInputFocused(false);
     };
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
   const handleSuggestionClick = (customerId: number) => {
-    setShowDropdown(false);
+    setInputFocused(false);
     setSearch('');
     setLocation(`/shop/customers/${customerId}`);
   };
@@ -77,26 +61,26 @@ export function CustomersList() {
         <CustomerCreateDialog />
       </div>
 
-      {/* Search with autocomplete */}
+      {/* Search + autocomplete dropdown */}
       <div className="relative">
-        <Search className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground w-6 h-6 z-10 pointer-events-none" />
+        <Search className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground w-6 h-6 pointer-events-none z-10" />
         <Input
           ref={inputRef}
           className="h-16 pl-4 pr-14 text-lg rounded-2xl bg-white shadow-lg border-0 focus-visible:ring-accent"
-          placeholder="ابحث برقم الهاتف (مثال: 9988...) أو اسم العميل..."
+          placeholder="ابحث برقم الهاتف (أرقام) أو اسم العميل..."
           value={search}
-          onChange={(e) => { setSearch(e.target.value); setShowDropdown(true); }}
-          onFocus={() => search.length >= 2 && setShowDropdown(true)}
+          onChange={(e) => setSearch(e.target.value)}
+          onFocus={() => setInputFocused(true)}
           dir="rtl"
+          autoComplete="off"
         />
 
-        {/* Phone autocomplete dropdown */}
-        {showDropdown && isLivePhone && suggestions.length > 0 && (
+        {showDropdown && (
           <div
             ref={dropdownRef}
-            className="absolute top-full mt-2 right-0 left-0 bg-white rounded-2xl shadow-2xl border border-border/50 z-50 overflow-hidden"
+            className="absolute top-full mt-2 right-0 left-0 bg-white rounded-2xl shadow-2xl border border-border/50 z-50 overflow-hidden max-h-72 overflow-y-auto"
           >
-            {suggestions.map((c) => (
+            {customers.map((c) => (
               <button
                 key={c.id}
                 type="button"
@@ -120,14 +104,14 @@ export function CustomersList() {
         )}
       </div>
 
-      {/* Results grid */}
+      {/* Customer grid */}
       {isLoading ? (
         <div className="flex justify-center p-12">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {data?.customers.map((customer) => (
+          {customers.map((customer) => (
             <Link key={customer.id} href={`/shop/customers/${customer.id}`}>
               <Card className="hover-elevate cursor-pointer border-0 shadow-md hover:shadow-xl transition-all rounded-2xl group">
                 <div className="p-6 flex items-center justify-between">
@@ -149,14 +133,18 @@ export function CustomersList() {
             </Link>
           ))}
 
-          {data?.customers.length === 0 && (
+          {customers.length === 0 && !isLoading && (
             <div className="col-span-full p-12 text-center text-muted-foreground bg-white rounded-2xl shadow-sm">
               <User className="w-12 h-12 mx-auto text-muted/50 mb-4" />
-              <p className="text-lg">لا يوجد عملاء مطابقين للبحث</p>
-              <CustomerCreateDialog
-                trigger={<Button variant="link" className="mt-2 text-accent">إضافة كعميل جديد؟</Button>}
-                initialPhone={isPhoneSearch ? search : ''}
-              />
+              <p className="text-lg">
+                {debouncedSearch ? 'لا يوجد عملاء مطابقين للبحث' : 'لا يوجد عملاء بعد'}
+              </p>
+              {debouncedSearch && /^\d+$/.test(debouncedSearch) && (
+                <CustomerCreateDialog
+                  trigger={<Button variant="link" className="mt-2 text-accent">إضافة كعميل جديد؟</Button>}
+                  initialPhone={debouncedSearch}
+                />
+              )}
             </div>
           )}
         </div>
@@ -172,7 +160,6 @@ function CustomerCreateDialog({ trigger, initialPhone = '' }: { trigger?: React.
   const { toast } = useToast();
   const [, setLocation] = useLocation();
 
-  // Sync initialPhone when it changes
   useEffect(() => { setPhone(initialPhone); }, [initialPhone]);
 
   const mutation = useCreateCustomer({
@@ -201,7 +188,7 @@ function CustomerCreateDialog({ trigger, initialPhone = '' }: { trigger?: React.
       data: {
         name: fd.get('name') as string,
         phone,
-        notes: fd.get('notes') as string,
+        notes: fd.get('notes') as string || undefined,
       }
     });
   };
@@ -222,12 +209,7 @@ function CustomerCreateDialog({ trigger, initialPhone = '' }: { trigger?: React.
         <form onSubmit={handleSubmit} className="space-y-4 mt-4">
           <div className="space-y-2">
             <label className="text-sm font-bold">اسم العميل</label>
-            <Input
-              name="name"
-              required
-              className="bg-muted/50 rounded-xl h-12"
-              placeholder="الاسم الكامل"
-            />
+            <Input name="name" required className="bg-muted/50 rounded-xl h-12" placeholder="الاسم الكامل" />
           </div>
           <div className="space-y-2">
             <label className="text-sm font-bold">رقم الهاتف (8 أرقام)</label>
@@ -235,10 +217,7 @@ function CustomerCreateDialog({ trigger, initialPhone = '' }: { trigger?: React.
               <Input
                 name="phone"
                 value={phone}
-                onChange={(e) => {
-                  const v = e.target.value.replace(/\D/g, '').slice(0, 8);
-                  setPhone(v);
-                }}
+                onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 8))}
                 required
                 className="bg-muted/50 rounded-xl h-12 font-mono text-lg tracking-widest"
                 dir="ltr"
