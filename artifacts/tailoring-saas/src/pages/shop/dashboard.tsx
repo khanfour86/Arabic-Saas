@@ -109,9 +109,15 @@ export function ShopDashboard() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <DashStatCard title="تحت الخياطة" value={stats?.underTailoring || 0} icon={<Scissors className="w-6 h-6 text-accent" />} color="bg-accent/10" />
-        <DashStatCard title="جاهزة للتسليم" value={stats?.readyForDelivery || 0} icon={<Clock className="w-6 h-6 text-emerald-500" />} color="bg-emerald-500/10" />
-        <DashStatCard title="تم التسليم اليوم" value={stats?.deliveredToday || 0} icon={<CheckCircle className="w-6 h-6 text-blue-500" />} color="bg-blue-500/10" />
+        <Link href="/shop/invoices?status=under_tailoring">
+          <DashStatCard title="تحت الخياطة" value={stats?.underTailoring || 0} icon={<Scissors className="w-6 h-6 text-accent" />} color="bg-accent/10" />
+        </Link>
+        <Link href="/shop/invoices?status=ready">
+          <DashStatCard title="جاهزة للتسليم" value={stats?.readyForDelivery || 0} icon={<Clock className="w-6 h-6 text-emerald-500" />} color="bg-emerald-500/10" />
+        </Link>
+        <Link href="/shop/invoices?status=delivered">
+          <DashStatCard title="تم التسليم اليوم" value={stats?.deliveredToday || 0} icon={<CheckCircle className="w-6 h-6 text-blue-500" />} color="bg-blue-500/10" />
+        </Link>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -197,14 +203,14 @@ export function ShopDashboard() {
 
 function DashStatCard({ title, value, icon, color }: { title: string, value: number, icon: React.ReactNode, color: string }) {
   return (
-    <Card className="border-0 shadow-md bg-white rounded-2xl overflow-hidden">
+    <Card className="hover-elevate cursor-pointer border-0 shadow-md bg-white rounded-2xl overflow-hidden hover:shadow-xl transition-all group">
       <CardContent className="p-6 flex items-center gap-4">
-        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${color}`}>
+        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110 ${color}`}>
           {icon}
         </div>
         <div>
           <h3 className="text-3xl font-display font-bold text-foreground">{value}</h3>
-          <p className="text-sm font-medium text-muted-foreground">{title}</p>
+          <p className="text-sm font-medium text-muted-foreground group-hover:text-primary transition-colors">{title}</p>
         </div>
       </CardContent>
     </Card>

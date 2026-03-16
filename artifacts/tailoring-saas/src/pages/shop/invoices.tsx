@@ -5,13 +5,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Search, Loader2, FileText, CheckCircle, MessageCircle, ChevronLeft, Calendar, Scissors } from 'lucide-react';
-import { Link, useLocation, useParams } from 'wouter';
+import { Link, useLocation, useParams, useSearch } from 'wouter';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 
 export function InvoicesList() {
-  const [statusFilter, setStatusFilter] = useState<ListInvoicesStatus | 'all'>('all');
+  const searchString = useSearch();
+  const urlStatus = new URLSearchParams(searchString).get('status') as ListInvoicesStatus | null;
+  const [statusFilter, setStatusFilter] = useState<ListInvoicesStatus | 'all'>(urlStatus || 'all');
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   
