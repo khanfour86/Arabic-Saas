@@ -164,9 +164,31 @@ export function OwnerShops() {
   );
 }
 
+const DURATION_OPTIONS = [
+  { label: '٣ أشهر', months: 3 },
+  { label: '٦ أشهر', months: 6 },
+  { label: 'سنة', months: 12 },
+  { label: 'سنتان', months: 24 },
+];
+
+function addMonths(dateStr: string, months: number): string {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  d.setMonth(d.getMonth() + months);
+  return d.toISOString().split('T')[0];
+}
+
 function ShopCreateForm({ onSuccess }: { onSuccess: () => void }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  const today = new Date().toISOString().split('T')[0];
+  const [phone, setPhone] = useState('');
+  const [subscriptionStart, setSubscriptionStart] = useState(today);
+  const [durationMonths, setDurationMonths] = useState(12);
+
+  const subscriptionEnd = addMonths(subscriptionStart, durationMonths);
+
   const mutation = useCreateShop({
     mutation: {
       onSuccess: () => {
@@ -181,15 +203,19 @@ function ShopCreateForm({ onSuccess }: { onSuccess: () => void }) {
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (phone.length !== 8) {
+      toast({ title: 'خطأ', description: 'رقم الهاتف يجب أن يكون 8 أرقام', variant: 'destructive' });
+      return;
+    }
     const fd = new FormData(e.currentTarget);
     mutation.mutate({
       data: {
         name: fd.get('name') as string,
         managerName: fd.get('managerName') as string,
-        phone: fd.get('phone') as string,
+        phone,
         area: fd.get('area') as string,
-        subscriptionStart: fd.get('subscriptionStart') as string,
-        subscriptionEnd: fd.get('subscriptionEnd') as string,
+        subscriptionStart,
+        subscriptionEnd,
         subscriptionStatus: 'active',
         managerUsername: fd.get('managerUsername') as string,
         managerPassword: fd.get('managerPassword') as string,
@@ -208,21 +234,70 @@ function ShopCreateForm({ onSuccess }: { onSuccess: () => void }) {
           <label className="text-sm font-bold">اسم المدير</label>
           <Input name="managerName" required className="bg-muted/50 rounded-xl" />
         </div>
+
+        {/* Phone — 8 digits only */}
         <div className="space-y-2">
-          <label className="text-sm font-bold">رقم الهاتف</label>
-          <Input name="phone" required className="bg-muted/50 rounded-xl" dir="ltr" />
+          <div className="flex justify-between items-center">
+            <label className="text-sm font-bold">رقم الهاتف</label>
+            <span className={`text-xs font-mono ${phone.length === 8 ? 'text-green-600 font-bold' : 'text-muted-foreground'}`}>
+              {phone.length} / 8
+            </span>
+          </div>
+          <Input
+            value={phone}
+            onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 8))}
+            required
+            className="bg-muted/50 rounded-xl font-mono tracking-widest"
+            dir="ltr"
+            placeholder="XXXXXXXX"
+            inputMode="numeric"
+            autoComplete="off"
+          />
+          <p className="text-xs text-muted-foreground">أرقام فقط — بدون رمز الدولة (965)</p>
         </div>
+
         <div className="space-y-2">
           <label className="text-sm font-bold">المنطقة</label>
           <Input name="area" required className="bg-muted/50 rounded-xl" />
         </div>
+
+        {/* Subscription start */}
         <div className="space-y-2">
           <label className="text-sm font-bold">بداية الاشتراك</label>
-          <Input type="date" name="subscriptionStart" required className="bg-muted/50 rounded-xl" />
+          <Input
+            type="date"
+            value={subscriptionStart}
+            onChange={e => setSubscriptionStart(e.target.value)}
+            required
+            className="bg-muted/50 rounded-xl"
+          />
         </div>
+
+        {/* Duration picker → auto-computes end date */}
         <div className="space-y-2">
-          <label className="text-sm font-bold">نهاية الاشتراك</label>
-          <Input type="date" name="subscriptionEnd" required className="bg-muted/50 rounded-xl" />
+          <label className="text-sm font-bold">مدة الاشتراك</label>
+          <div className="grid grid-cols-2 gap-2">
+            {DURATION_OPTIONS.map(opt => (
+              <button
+                key={opt.months}
+                type="button"
+                onClick={() => setDurationMonths(opt.months)}
+                className={`h-11 rounded-xl text-sm font-bold border-2 transition-all ${
+                  durationMonths === opt.months
+                    ? 'border-primary bg-primary text-white shadow-md'
+                    : 'border-muted bg-muted/50 text-foreground hover:border-primary/40'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          {subscriptionEnd && (
+            <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+              <Calendar className="w-3 h-3" />
+              نهاية الاشتراك: <span className="font-bold text-foreground" dir="ltr">{subscriptionEnd}</span>
+            </p>
+          )}
         </div>
       </div>
 
@@ -231,7 +306,7 @@ function ShopCreateForm({ onSuccess }: { onSuccess: () => void }) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
             <label className="text-sm font-bold">اسم المستخدم</label>
-            <Input name="managerUsername" required className="bg-white rounded-xl" dir="ltr" />
+            <Input name="managerUsername" required className="bg-white rounded-xl" dir="ltr" autoComplete="off" />
           </div>
           <div className="space-y-2">
             <label className="text-sm font-bold">كلمة المرور</label>
@@ -240,7 +315,7 @@ function ShopCreateForm({ onSuccess }: { onSuccess: () => void }) {
         </div>
       </div>
 
-      <Button type="submit" className="w-full h-12 rounded-xl text-lg font-bold" disabled={mutation.isPending}>
+      <Button type="submit" className="w-full h-12 rounded-xl text-lg font-bold" disabled={mutation.isPending || phone.length !== 8}>
         {mutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : 'حفظ وإنشاء المحل'}
       </Button>
     </form>

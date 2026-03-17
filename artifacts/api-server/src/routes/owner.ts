@@ -25,7 +25,10 @@ router.get("/owner/shops", requireAuth, requireOwner, async (req, res): Promise<
 });
 
 router.post("/owner/shops", requireAuth, requireOwner, async (req, res): Promise<void> => {
-  const parsed = CreateShopBody.safeParse(req.body);
+  const body = { ...req.body };
+  if (body.subscriptionStart && typeof body.subscriptionStart === 'string') body.subscriptionStart = new Date(body.subscriptionStart);
+  if (body.subscriptionEnd && typeof body.subscriptionEnd === 'string') body.subscriptionEnd = new Date(body.subscriptionEnd);
+  const parsed = CreateShopBody.safeParse(body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
