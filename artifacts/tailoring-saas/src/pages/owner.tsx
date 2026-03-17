@@ -6,9 +6,9 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Store, Users, CheckCircle, XCircle, AlertCircle, Plus, Loader2, Calendar } from 'lucide-react';
+import { Store, Users, CheckCircle, XCircle, Plus, Loader2, Calendar, Pencil, KeyRound, User, ShieldCheck, Scissors, PhoneCall } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 
@@ -247,29 +247,145 @@ function ShopCreateForm({ onSuccess }: { onSuccess: () => void }) {
   );
 }
 
+const ROLE_LABELS: Record<string, string> = {
+  shop_manager: 'مدير المحل',
+  reception: 'استقبال',
+  tailor: 'خياط',
+};
+const ROLE_ICONS: Record<string, React.ReactNode> = {
+  shop_manager: <ShieldCheck className="w-4 h-4 text-primary" />,
+  reception: <PhoneCall className="w-4 h-4 text-accent" />,
+  tailor: <Scissors className="w-4 h-4 text-amber-500" />,
+};
+
+function UserEditRow({ shopId, user, onSaved }: { shopId: number; user: any; onSaved: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const [username, setUsername] = useState(user.username);
+  const [name, setName] = useState(user.name);
+  const [password, setPassword] = useState('');
+  const { toast } = useToast();
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const body: any = {};
+      if (username !== user.username) body.username = username;
+      if (name !== user.name) body.name = name;
+      if (password) body.password = password;
+      const res = await fetch(`/api/owner/shops/${shopId}/users/${user.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || 'خطأ في التحديث');
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: 'تم تحديث المستخدم' });
+      setPassword('');
+      setEditing(false);
+      onSaved();
+    },
+    onError: (err: any) => toast({ title: 'خطأ', description: err.message, variant: 'destructive' }),
+  });
+
+  if (!editing) {
+    return (
+      <div className="flex items-center justify-between py-3 px-4 rounded-xl hover:bg-muted/40 transition-colors">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center">
+            {ROLE_ICONS[user.role] ?? <User className="w-4 h-4" />}
+          </div>
+          <div>
+            <p className="font-bold text-sm">{user.name}</p>
+            <p className="text-xs text-muted-foreground flex items-center gap-1">
+              <span dir="ltr">{user.username}</span>
+              <span>·</span>
+              <span>{ROLE_LABELS[user.role] ?? user.role}</span>
+            </p>
+          </div>
+        </div>
+        <Button size="sm" variant="ghost" className="gap-1 text-primary" onClick={() => setEditing(true)}>
+          <Pencil className="w-3.5 h-3.5" /> تعديل
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="border border-primary/20 rounded-xl p-4 space-y-3 bg-primary/5">
+      <div className="flex items-center gap-2 mb-1">
+        {ROLE_ICONS[user.role]}
+        <span className="font-bold text-sm">{ROLE_LABELS[user.role] ?? user.role}</span>
+      </div>
+      <div className="grid grid-cols-1 gap-3">
+        <div className="space-y-1">
+          <label className="text-xs font-bold text-muted-foreground">الاسم الكامل</label>
+          <Input value={name} onChange={e => setName(e.target.value)} className="h-10 bg-white rounded-lg text-sm" />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs font-bold text-muted-foreground">اسم المستخدم</label>
+          <Input value={username} onChange={e => setUsername(e.target.value)} className="h-10 bg-white rounded-lg text-sm" dir="ltr" />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs font-bold text-muted-foreground flex items-center gap-1">
+            <KeyRound className="w-3 h-3" /> كلمة مرور جديدة (اتركها فارغة إذا لا تريد تغييرها)
+          </label>
+          <Input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" className="h-10 bg-white rounded-lg text-sm" dir="ltr" />
+        </div>
+      </div>
+      <div className="flex gap-2 pt-1">
+        <Button size="sm" onClick={() => mutation.mutate()} disabled={mutation.isPending} className="flex-1">
+          {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'حفظ'}
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => { setEditing(false); setUsername(user.username); setName(user.name); setPassword(''); }}>
+          إلغاء
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function ShopEditDialog({ shop }: { shop: any }) {
   const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState<'info' | 'users'>('info');
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const mutation = useUpdateShop({
+
+  const { data: usersData, refetch: refetchUsers } = useQuery({
+    queryKey: [`/api/owner/shops/${shop.id}/users`],
+    queryFn: async () => {
+      const res = await fetch(`/api/owner/shops/${shop.id}/users`);
+      if (!res.ok) throw new Error('خطأ في جلب المستخدمين');
+      return res.json() as Promise<{ users: any[] }>;
+    },
+    enabled: open,
+  });
+
+  const shopMutation = useUpdateShop({
     mutation: {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ['/api/owner/shops'] });
         queryClient.invalidateQueries({ queryKey: ['/api/owner/stats'] });
-        toast({ title: 'تم التحديث بنجاح' });
-        setOpen(false);
-      }
+        toast({ title: 'تم تحديث بيانات المحل' });
+      },
+      onError: (err) => toast({ title: 'خطأ', description: err.message, variant: 'destructive' }),
     }
   });
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleShopSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
-    mutation.mutate({
+    shopMutation.mutate({
       shopId: shop.id,
       data: {
-        subscriptionStatus: fd.get('status') as any,
+        name: fd.get('name') as string,
+        managerName: fd.get('managerName') as string,
+        phone: fd.get('phone') as string,
+        area: fd.get('area') as string,
+        subscriptionStart: fd.get('subscriptionStart') as string,
         subscriptionEnd: fd.get('subscriptionEnd') as string,
+        subscriptionStatus: fd.get('subscriptionStatus') as any,
+        notes: fd.get('notes') as string || undefined,
       }
     });
   };
@@ -277,34 +393,91 @@ function ShopEditDialog({ shop }: { shop: any }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="rounded-xl">تعديل</Button>
+        <Button variant="outline" className="rounded-xl gap-1.5"><Pencil className="w-3.5 h-3.5" /> تعديل</Button>
       </DialogTrigger>
-      <DialogContent dir="rtl">
+      <DialogContent dir="rtl" className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>تحديث حالة المحل: {shop.name}</DialogTitle>
+          <DialogTitle className="font-display text-xl flex items-center gap-2">
+            <Store className="w-5 h-5 text-primary" /> {shop.name}
+          </DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+
+        {/* Tabs */}
+        <div className="flex border-b mb-4">
+          <button
+            className={`px-5 py-2.5 text-sm font-bold border-b-2 transition-colors ${tab === 'info' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+            onClick={() => setTab('info')}
+          >بيانات المحل</button>
+          <button
+            className={`px-5 py-2.5 text-sm font-bold border-b-2 transition-colors flex items-center gap-1.5 ${tab === 'users' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+            onClick={() => setTab('users')}
+          ><Users className="w-4 h-4" /> المستخدمون</button>
+        </div>
+
+        {tab === 'info' && (
+          <form onSubmit={handleShopSubmit} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-sm font-bold">اسم المحل</label>
+                <Input name="name" defaultValue={shop.name} required className="bg-muted/50 rounded-xl" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-bold">اسم المدير</label>
+                <Input name="managerName" defaultValue={shop.managerName} required className="bg-muted/50 rounded-xl" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-bold">رقم الهاتف</label>
+                <Input name="phone" defaultValue={shop.phone} required className="bg-muted/50 rounded-xl" dir="ltr" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-bold">المنطقة</label>
+                <Input name="area" defaultValue={shop.area} required className="bg-muted/50 rounded-xl" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-bold">بداية الاشتراك</label>
+                <Input type="date" name="subscriptionStart" defaultValue={shop.subscriptionStart?.split('T')[0]} required className="bg-muted/50 rounded-xl" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-bold">نهاية الاشتراك</label>
+                <Input type="date" name="subscriptionEnd" defaultValue={shop.subscriptionEnd?.split('T')[0]} required className="bg-muted/50 rounded-xl" />
+              </div>
+              <div className="space-y-1.5 md:col-span-2">
+                <label className="text-sm font-bold">حالة الاشتراك</label>
+                <Select name="subscriptionStatus" defaultValue={shop.subscriptionStatus}>
+                  <SelectTrigger className="bg-muted/50 rounded-xl" dir="rtl">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent dir="rtl">
+                    <SelectItem value="active">نشط</SelectItem>
+                    <SelectItem value="expired">منتهي</SelectItem>
+                    <SelectItem value="suspended">موقوف</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5 md:col-span-2">
+                <label className="text-sm font-bold">ملاحظات</label>
+                <Input name="notes" defaultValue={shop.notes ?? ''} className="bg-muted/50 rounded-xl" placeholder="ملاحظات اختيارية..." />
+              </div>
+            </div>
+            <Button type="submit" className="w-full h-12 rounded-xl font-bold" disabled={shopMutation.isPending}>
+              {shopMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : 'حفظ بيانات المحل'}
+            </Button>
+          </form>
+        )}
+
+        {tab === 'users' && (
           <div className="space-y-2">
-            <label className="text-sm font-bold">الحالة</label>
-            <Select name="status" defaultValue={shop.subscriptionStatus}>
-              <SelectTrigger className="bg-muted/50 rounded-xl" dir="rtl">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent dir="rtl">
-                <SelectItem value="active">نشط</SelectItem>
-                <SelectItem value="expired">منتهي</SelectItem>
-                <SelectItem value="suspended">موقوف</SelectItem>
-              </SelectContent>
-            </Select>
+            {!usersData ? (
+              <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
+            ) : usersData.users.length === 0 ? (
+              <p className="text-center text-muted-foreground py-8">لا يوجد مستخدمون لهذا المحل</p>
+            ) : (
+              usersData.users.map(user => (
+                <UserEditRow key={user.id} shopId={shop.id} user={user} onSaved={refetchUsers} />
+              ))
+            )}
           </div>
-          <div className="space-y-2">
-            <label className="text-sm font-bold">نهاية الاشتراك</label>
-            <Input type="date" name="subscriptionEnd" defaultValue={shop.subscriptionEnd.split('T')[0]} required className="bg-muted/50 rounded-xl" />
-          </div>
-          <Button type="submit" className="w-full h-12 rounded-xl mt-4" disabled={mutation.isPending}>
-            {mutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : 'حفظ التغييرات'}
-          </Button>
-        </form>
+        )}
       </DialogContent>
     </Dialog>
   );

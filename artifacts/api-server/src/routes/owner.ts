@@ -67,7 +67,11 @@ router.get("/owner/shops/:shopId", requireAuth, requireOwner, async (req, res): 
 
 router.patch("/owner/shops/:shopId", requireAuth, requireOwner, async (req, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.shopId) ? req.params.shopId[0] : req.params.shopId, 10);
-  const parsed = UpdateShopBody.safeParse(req.body);
+  // Coerce date strings to Date objects before Zod validation
+  const body = { ...req.body };
+  if (body.subscriptionStart && typeof body.subscriptionStart === 'string') body.subscriptionStart = new Date(body.subscriptionStart);
+  if (body.subscriptionEnd && typeof body.subscriptionEnd === 'string') body.subscriptionEnd = new Date(body.subscriptionEnd);
+  const parsed = UpdateShopBody.safeParse(body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
@@ -90,6 +94,44 @@ router.patch("/owner/shops/:shopId", requireAuth, requireOwner, async (req, res)
     return;
   }
   res.json(shop);
+});
+
+router.get("/owner/shops/:shopId/users", requireAuth, requireOwner, async (req, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.shopId) ? req.params.shopId[0] : req.params.shopId, 10);
+  const users = await db.select({
+    id: usersTable.id,
+    username: usersTable.username,
+    name: usersTable.name,
+    role: usersTable.role,
+  }).from(usersTable).where(eq(usersTable.shopId, id));
+  res.json({ users });
+});
+
+router.patch("/owner/shops/:shopId/users/:userId", requireAuth, requireOwner, async (req, res): Promise<void> => {
+  const shopId = parseInt(Array.isArray(req.params.shopId) ? req.params.shopId[0] : req.params.shopId, 10);
+  const userId = parseInt(Array.isArray(req.params.userId) ? req.params.userId[0] : req.params.userId, 10);
+
+  const { username, password, name } = req.body;
+  const updateData: Record<string, any> = {};
+  if (username) updateData.username = username;
+  if (name) updateData.name = name;
+  if (password) updateData.passwordHash = hashPassword(password);
+
+  if (Object.keys(updateData).length === 0) {
+    res.status(400).json({ error: "لا يوجد بيانات للتحديث" });
+    return;
+  }
+
+  const [user] = await db.update(usersTable)
+    .set(updateData)
+    .where(and(eq(usersTable.id, userId), eq(usersTable.shopId, shopId)))
+    .returning({ id: usersTable.id, username: usersTable.username, name: usersTable.name, role: usersTable.role });
+
+  if (!user) {
+    res.status(404).json({ error: "المستخدم غير موجود" });
+    return;
+  }
+  res.json(user);
 });
 
 router.get("/owner/stats", requireAuth, requireOwner, async (_req, res): Promise<void> => {
