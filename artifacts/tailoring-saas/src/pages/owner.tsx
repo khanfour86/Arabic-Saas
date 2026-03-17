@@ -73,8 +73,18 @@ function StatCard({ title, value, icon }: { title: string, value: number, icon: 
 
 export function OwnerShops() {
   const [statusFilter, setStatusFilter] = useState<ListShopsStatus | 'all'>('all');
+  const [search, setSearch] = useState('');
   const { data, isLoading } = useListShops({ status: statusFilter === 'all' ? null : statusFilter });
   const [createOpen, setCreateOpen] = useState(false);
+
+  const q = search.trim().toLowerCase();
+  const filteredShops = q
+    ? (data?.shops ?? []).filter(s =>
+        s.name.toLowerCase().includes(q) ||
+        s.phone.includes(q) ||
+        s.area.toLowerCase().includes(q)
+      )
+    : (data?.shops ?? []);
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -99,26 +109,50 @@ export function OwnerShops() {
       </div>
 
       <Card className="border-0 shadow-xl rounded-2xl overflow-hidden">
-        <div className="p-4 border-b bg-muted/50 flex gap-2 overflow-x-auto">
+        {/* Search bar */}
+        <div className="p-4 border-b bg-white">
+          <div className="relative">
+            <Store className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
+            <Input
+              value={search}
+              onChange={e => setSearch(toEnglishDigits(e.target.value))}
+              placeholder="ابحث باسم المحل أو رقم الهاتف أو المنطقة..."
+              className="h-12 pr-12 pl-4 rounded-xl bg-muted/50 border-0 focus-visible:ring-primary text-base"
+              dir="rtl"
+              autoComplete="off"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch('')}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Status filter tabs */}
+        <div className="px-4 py-3 border-b bg-muted/50 flex gap-2 overflow-x-auto">
           {['all', 'active', 'expired', 'suspended'].map(filter => (
-            <Button 
+            <Button
               key={filter}
               variant={statusFilter === filter ? 'default' : 'outline'}
               className={`rounded-full px-6 ${statusFilter === filter ? 'shadow-md' : 'bg-white'}`}
               onClick={() => setStatusFilter(filter as any)}
             >
-              {filter === 'all' ? 'الكل' : 
-               filter === 'active' ? 'نشط' : 
+              {filter === 'all' ? 'الكل' :
+               filter === 'active' ? 'نشط' :
                filter === 'expired' ? 'منتهي' : 'موقوف'}
             </Button>
           ))}
         </div>
-        
+
         {isLoading ? (
           <div className="p-12 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
         ) : (
           <div className="divide-y">
-            {data?.shops.map(shop => (
+            {filteredShops.map(shop => (
               <div key={shop.id} className="p-4 md:p-6 hover:bg-primary/5 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex items-start gap-4">
                   <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
@@ -129,7 +163,7 @@ export function OwnerShops() {
                     <div className="text-sm text-muted-foreground flex items-center gap-3 mt-1">
                       <span>{shop.area}</span>
                       <span>•</span>
-                      <span>{shop.phone}</span>
+                      <span dir="ltr">{shop.phone}</span>
                       <span>•</span>
                       <span>المدير: {shop.managerName}</span>
                     </div>
@@ -155,8 +189,18 @@ export function OwnerShops() {
                 </div>
               </div>
             ))}
-            {data?.shops.length === 0 && (
-              <div className="p-12 text-center text-muted-foreground">لا توجد محلات تطابق البحث</div>
+            {filteredShops.length === 0 && (
+              <div className="p-12 text-center space-y-2">
+                <Store className="w-10 h-10 text-muted-foreground/40 mx-auto" />
+                <p className="text-muted-foreground">
+                  {search ? `لا توجد نتائج لـ "${search}"` : 'لا توجد محلات'}
+                </p>
+                {search && (
+                  <button onClick={() => setSearch('')} className="text-sm text-primary underline">
+                    مسح البحث
+                  </button>
+                )}
+              </div>
             )}
           </div>
         )}
