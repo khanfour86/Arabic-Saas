@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, shopsTable, usersTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, ilike } from "drizzle-orm";
 import { CreateShopBody, UpdateShopBody } from "@workspace/api-zod";
 import { requireAuth, requireOwner, hashPassword } from "../lib/auth";
 
@@ -22,6 +22,28 @@ router.get("/owner/shops", requireAuth, requireOwner, async (req, res): Promise<
     : await db.select().from(shopsTable).orderBy(shopsTable.createdAt);
 
   res.json({ shops });
+});
+
+// Check uniqueness of shop name, phone, or manager username before creating
+router.get("/owner/check-unique", requireAuth, requireOwner, async (req, res): Promise<void> => {
+  const { field, value } = req.query as { field?: string; value?: string };
+  if (!field || !value) { res.json({ taken: false }); return; }
+
+  let taken = false;
+  if (field === 'name') {
+    const [row] = await db.select({ id: shopsTable.id }).from(shopsTable)
+      .where(ilike(shopsTable.name, value.trim()));
+    taken = !!row;
+  } else if (field === 'phone') {
+    const [row] = await db.select({ id: shopsTable.id }).from(shopsTable)
+      .where(eq(shopsTable.phone, value.trim()));
+    taken = !!row;
+  } else if (field === 'username') {
+    const [row] = await db.select({ id: usersTable.id }).from(usersTable)
+      .where(eq(usersTable.username, value.trim()));
+    taken = !!row;
+  }
+  res.json({ taken });
 });
 
 router.post("/owner/shops", requireAuth, requireOwner, async (req, res): Promise<void> => {

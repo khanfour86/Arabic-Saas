@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useGetOwnerStats, useListShops, useCreateShop, useUpdateShop, ListShopsStatus } from '@workspace/api-client-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Store, Users, CheckCircle, XCircle, Plus, Loader2, Calendar, Pencil, KeyRound, User, ShieldCheck, Scissors, PhoneCall } from 'lucide-react';
+import { Store, Users, CheckCircle, XCircle, Plus, Loader2, Calendar, Pencil, KeyRound, User, ShieldCheck, Scissors, PhoneCall, AlertCircle } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
@@ -178,16 +178,65 @@ function addMonths(dateStr: string, months: number): string {
   return d.toISOString().split('T')[0];
 }
 
+// Debounce helper: returns debounced value after delay ms
+function useDebounce<T>(value: T, delay = 450): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedValue(value), delay);
+    return () => clearTimeout(timer);
+  }, [value, delay]);
+  return debouncedValue;
+}
+
+// Check uniqueness against the server — returns { taken, checking }
+function useUniqueCheck(field: string, value: string, minLen = 1) {
+  const [checking, setChecking] = useState(false);
+  const [taken, setTaken] = useState(false);
+  const debounced = useDebounce(value);
+  const abortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    if (debounced.length < minLen) { setTaken(false); setChecking(false); return; }
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    setChecking(true);
+    fetch(`/api/owner/check-unique?field=${field}&value=${encodeURIComponent(debounced)}`, { signal: ctrl.signal })
+      .then(r => r.json())
+      .then(data => { setTaken(data.taken); setChecking(false); })
+      .catch(() => setChecking(false));
+    return () => ctrl.abort();
+  }, [debounced, field, minLen]);
+
+  return { taken, checking };
+}
+
+// Inline status indicator shown at the end of an input
+function FieldStatus({ checking, taken, takenMsg }: { checking: boolean; taken: boolean; takenMsg: string }) {
+  if (checking) return <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1"><Loader2 className="w-3 h-3 animate-spin" />جاري التحقق…</p>;
+  if (taken) return <p className="text-xs text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" />{takenMsg}</p>;
+  return null;
+}
+
 function ShopCreateForm({ onSuccess }: { onSuccess: () => void }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
   const today = new Date().toISOString().split('T')[0];
+  const [shopName, setShopName] = useState('');
   const [phone, setPhone] = useState('');
+  const [managerUsername, setManagerUsername] = useState('');
   const [subscriptionStart, setSubscriptionStart] = useState(today);
   const [durationMonths, setDurationMonths] = useState(12);
 
   const subscriptionEnd = addMonths(subscriptionStart, durationMonths);
+
+  const nameCheck = useUniqueCheck('name', shopName, 2);
+  const phoneCheck = useUniqueCheck('phone', phone, 8);
+  const usernameCheck = useUniqueCheck('username', managerUsername, 3);
+
+  const hasError = nameCheck.taken || phoneCheck.taken || usernameCheck.taken;
+  const stillChecking = nameCheck.checking || phoneCheck.checking || usernameCheck.checking;
 
   const mutation = useCreateShop({
     mutation: {
@@ -207,17 +256,21 @@ function ShopCreateForm({ onSuccess }: { onSuccess: () => void }) {
       toast({ title: 'خطأ', description: 'رقم الهاتف يجب أن يكون 8 أرقام', variant: 'destructive' });
       return;
     }
+    if (hasError) {
+      toast({ title: 'خطأ', description: 'يوجد بيانات مكررة، يرجى التصحيح أولاً', variant: 'destructive' });
+      return;
+    }
     const fd = new FormData(e.currentTarget);
     mutation.mutate({
       data: {
-        name: fd.get('name') as string,
+        name: shopName,
         managerName: fd.get('managerName') as string,
         phone,
         area: fd.get('area') as string,
         subscriptionStart,
         subscriptionEnd,
         subscriptionStatus: 'active',
-        managerUsername: fd.get('managerUsername') as string,
+        managerUsername,
         managerPassword: fd.get('managerPassword') as string,
       }
     });
@@ -226,20 +279,29 @@ function ShopCreateForm({ onSuccess }: { onSuccess: () => void }) {
   return (
     <form onSubmit={handleSubmit} className="space-y-6 mt-4">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+        {/* Shop name — uniqueness check */}
         <div className="space-y-2">
           <label className="text-sm font-bold">اسم المحل</label>
-          <Input name="name" required className="bg-muted/50 rounded-xl" />
+          <Input
+            value={shopName}
+            onChange={e => setShopName(e.target.value)}
+            required
+            className={`bg-muted/50 rounded-xl ${nameCheck.taken ? 'border-destructive focus-visible:ring-destructive' : ''}`}
+          />
+          <FieldStatus checking={nameCheck.checking} taken={nameCheck.taken} takenMsg="اسم المحل مستخدم مسبقاً" />
         </div>
+
         <div className="space-y-2">
           <label className="text-sm font-bold">اسم المدير</label>
           <Input name="managerName" required className="bg-muted/50 rounded-xl" />
         </div>
 
-        {/* Phone — 8 digits only */}
+        {/* Phone — 8 digits + uniqueness check */}
         <div className="space-y-2">
           <div className="flex justify-between items-center">
             <label className="text-sm font-bold">رقم الهاتف</label>
-            <span className={`text-xs font-mono ${phone.length === 8 ? 'text-green-600 font-bold' : 'text-muted-foreground'}`}>
+            <span className={`text-xs font-mono ${phone.length === 8 && !phoneCheck.taken ? 'text-green-600 font-bold' : phoneCheck.taken ? 'text-destructive' : 'text-muted-foreground'}`}>
               {phone.length} / 8
             </span>
           </div>
@@ -247,13 +309,14 @@ function ShopCreateForm({ onSuccess }: { onSuccess: () => void }) {
             value={phone}
             onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 8))}
             required
-            className="bg-muted/50 rounded-xl font-mono tracking-widest"
+            className={`bg-muted/50 rounded-xl font-mono tracking-widest ${phoneCheck.taken ? 'border-destructive focus-visible:ring-destructive' : ''}`}
             dir="ltr"
             placeholder="XXXXXXXX"
             inputMode="numeric"
             autoComplete="off"
           />
-          <p className="text-xs text-muted-foreground">أرقام فقط — بدون رمز الدولة (965)</p>
+          {!phoneCheck.taken && <p className="text-xs text-muted-foreground">أرقام فقط — بدون رمز الدولة (965)</p>}
+          <FieldStatus checking={phoneCheck.checking} taken={phoneCheck.taken} takenMsg="رقم الهاتف مسجّل لمحل آخر" />
         </div>
 
         <div className="space-y-2">
@@ -304,10 +367,21 @@ function ShopCreateForm({ onSuccess }: { onSuccess: () => void }) {
       <div className="p-4 bg-primary/5 rounded-xl space-y-4 border border-primary/10">
         <h3 className="font-bold text-primary">بيانات دخول المدير</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+          {/* Username — uniqueness check */}
           <div className="space-y-2">
             <label className="text-sm font-bold">اسم المستخدم</label>
-            <Input name="managerUsername" required className="bg-white rounded-xl" dir="ltr" autoComplete="off" />
+            <Input
+              value={managerUsername}
+              onChange={e => setManagerUsername(e.target.value.trim())}
+              required
+              className={`bg-white rounded-xl ${usernameCheck.taken ? 'border-destructive focus-visible:ring-destructive' : ''}`}
+              dir="ltr"
+              autoComplete="off"
+            />
+            <FieldStatus checking={usernameCheck.checking} taken={usernameCheck.taken} takenMsg="اسم المستخدم مستخدم مسبقاً" />
           </div>
+
           <div className="space-y-2">
             <label className="text-sm font-bold">كلمة المرور</label>
             <Input name="managerPassword" required className="bg-white rounded-xl" dir="ltr" />
@@ -315,7 +389,11 @@ function ShopCreateForm({ onSuccess }: { onSuccess: () => void }) {
         </div>
       </div>
 
-      <Button type="submit" className="w-full h-12 rounded-xl text-lg font-bold" disabled={mutation.isPending || phone.length !== 8}>
+      <Button
+        type="submit"
+        className="w-full h-12 rounded-xl text-lg font-bold"
+        disabled={mutation.isPending || phone.length !== 8 || hasError || stillChecking}
+      >
         {mutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : 'حفظ وإنشاء المحل'}
       </Button>
     </form>
