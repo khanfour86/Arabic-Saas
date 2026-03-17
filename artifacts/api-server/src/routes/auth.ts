@@ -35,7 +35,7 @@ router.post("/auth/login", async (req, res): Promise<void> => {
     shopId: user.shopId,
   };
 
-  const token = createSession(authUser);
+  const token = await createSession(authUser);
 
   res.json({
     user: { ...authUser, shopName },
@@ -46,7 +46,7 @@ router.post("/auth/login", async (req, res): Promise<void> => {
 router.post("/auth/logout", requireAuth, async (req, res): Promise<void> => {
   const auth = req.headers.authorization!;
   const token = auth.slice(7);
-  deleteSession(token);
+  await deleteSession(token);
   res.json({ message: "تم تسجيل الخروج" });
 });
 
