@@ -99,11 +99,13 @@ export function OwnerShops() {
               <Plus className="w-5 h-5" /> إضافة محل جديد
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-2xl" dir="rtl">
-            <DialogHeader>
+          <DialogContent className="sm:max-w-2xl max-h-[92dvh] flex flex-col overflow-hidden" dir="rtl">
+            <DialogHeader className="flex-shrink-0">
               <DialogTitle className="font-display text-2xl text-primary">إضافة محل جديد</DialogTitle>
             </DialogHeader>
-            <ShopCreateForm onSuccess={() => setCreateOpen(false)} />
+            <div className="overflow-y-auto flex-1 overscroll-contain -mx-6 px-6 pb-2">
+              <ShopCreateForm onSuccess={() => setCreateOpen(false)} />
+            </div>
           </DialogContent>
         </Dialog>
       </div>
@@ -611,13 +613,14 @@ function ShopEditDialog({ shop }: { shop: any }) {
       <DialogTrigger asChild>
         <Button variant="outline" className="rounded-xl gap-1.5"><Pencil className="w-3.5 h-3.5" /> تعديل</Button>
       </DialogTrigger>
-      <DialogContent dir="rtl" className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent dir="rtl" className="sm:max-w-2xl max-h-[92dvh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle className="font-display text-xl flex items-center gap-2">
             <Store className="w-5 h-5 text-primary" /> {shop.name}
           </DialogTitle>
         </DialogHeader>
 
+        <div className="overflow-y-auto flex-1 overscroll-contain -mx-6 px-6">
         {/* Tabs */}
         <div className="flex border-b mb-4">
           <button
@@ -694,6 +697,7 @@ function ShopEditDialog({ shop }: { shop: any }) {
             )}
           </div>
         )}
+        </div>
       </DialogContent>
     </Dialog>
   );

@@ -95,3 +95,9 @@
     @apply bg-white/80 backdrop-blur-xl border border-white/20 shadow-xl;
   }
 }
+
+/* iOS Safari: enable momentum scrolling inside dialogs */
+[role="dialog"] .overflow-y-auto,
+[data-radix-dialog-content] .overflow-y-auto {
+  -webkit-overflow-scrolling: touch;
+}
