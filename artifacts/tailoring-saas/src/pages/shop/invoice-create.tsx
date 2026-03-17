@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { toEnglishDigits } from '@/lib/digits';
 import { useGetCustomer, useCreateInvoice, CreateSubOrderInput } from '@workspace/api-client-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -113,11 +114,12 @@ export function InvoiceCreate() {
                 <div className="space-y-2">
                   <label className="text-sm font-bold">الكمية (عدد الدشاديش)</label>
                   <Input 
-                    type="number" min="1" 
+                    type="text"
+                    inputMode="numeric"
                     value={order.quantity}
                     onChange={(e) => {
                       const newOrders = [...subOrders];
-                      newOrders[index].quantity = parseInt(e.target.value) || 1;
+                      newOrders[index].quantity = parseInt(toEnglishDigits(e.target.value)) || 1;
                       setSubOrders(newOrders);
                     }}
                     className="h-14 bg-muted/50 rounded-xl text-center text-lg font-bold"
@@ -162,12 +164,11 @@ export function InvoiceCreate() {
                   <label className="text-sm font-bold text-primary">السعر الإجمالي للطلب</label>
                   <div className="relative">
                     <Input 
-                      type="number"
-                      min="0"
-                      step="0.001"
+                      type="text"
+                      inputMode="decimal"
                       value={order.price || ''}
                       onChange={(e) => {
-                        const newPrice = parseFloat(e.target.value) || 0;
+                        const newPrice = parseFloat(toEnglishDigits(e.target.value)) || 0;
                         const newOrders = [...subOrders];
                         newOrders[index].price = newPrice;
                         // If paid exceeds new price, cap it
@@ -191,13 +192,11 @@ export function InvoiceCreate() {
                   </div>
                   <div className="relative">
                     <Input 
-                      type="number"
-                      min="0"
-                      step="0.001"
-                      max={order.price}
+                      type="text"
+                      inputMode="decimal"
                       value={order.paidAmount || ''}
                       onChange={(e) => {
-                        const paid = parseFloat(e.target.value) || 0;
+                        const paid = parseFloat(toEnglishDigits(e.target.value)) || 0;
                         const newOrders = [...subOrders];
                         // Clamp: paid cannot exceed price
                         newOrders[index].paidAmount = Math.min(paid, newOrders[index].price);

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { toEnglishDigits } from '@/lib/digits';
 import { useGetCustomer, useCreateProfile, useUpsertMeasurements, useUpdateCustomer, useUpdateProfile } from '@workspace/api-client-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -389,7 +390,17 @@ function MeasurementsDialog({ profile, customerId }: { profile: any; customerId:
             ].map(({ label, name }) => (
               <div key={name} className="space-y-2">
                 <label className="text-sm font-bold text-primary">{label}</label>
-                <Input type="number" step="0.5" name={name} defaultValue={(m as any)[name] || ''} className="h-12 text-lg text-center font-bold bg-muted/50 rounded-xl" />
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  name={name}
+                  defaultValue={(m as any)[name] || ''}
+                  onInput={(e) => {
+                    const t = e.target as HTMLInputElement;
+                    t.value = toEnglishDigits(t.value);
+                  }}
+                  className="h-12 text-lg text-center font-bold bg-muted/50 rounded-xl"
+                />
               </div>
             ))}
           </div>
