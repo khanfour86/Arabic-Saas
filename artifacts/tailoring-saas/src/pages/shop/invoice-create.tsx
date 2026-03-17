@@ -24,7 +24,7 @@ export function InvoiceCreate() {
   });
 
   const [subOrders, setSubOrders] = useState<CreateSubOrderInput[]>([
-    { profileId: 0, quantity: 1, fabricSource: 'shop_fabric', fabricDescription: '', price: 0, paidAmount: 0 }
+    { profileId: 0, quantity: 0, fabricSource: 'shop_fabric', fabricDescription: '', price: 0, paidAmount: 0 }
   ]);
 
   const mutation = useCreateInvoice({
@@ -51,8 +51,12 @@ export function InvoiceCreate() {
       toast({ title: 'خطأ', description: 'يجب اختيار ملف القياس لكل طلب', variant: 'destructive' });
       return;
     }
+    if (subOrders.some(o => !o.quantity || Number(o.quantity) <= 0)) {
+      toast({ title: 'خطأ', description: 'يجب إدخال الكمية (عدد الدشاديش) لكل طلب', variant: 'destructive' });
+      return;
+    }
     if (subOrders.some(o => Number(o.price) <= 0)) {
-      toast({ title: 'خطأ', description: 'يجب إدخال سعر لكل طلب', variant: 'destructive' });
+      toast({ title: 'خطأ', description: 'يجب إدخال السعر الإجمالي لكل طلب', variant: 'destructive' });
       return;
     }
     if (subOrders.some(o => Number(o.paidAmount) > Number(o.price))) {
@@ -112,17 +116,24 @@ export function InvoiceCreate() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-bold">الكمية (عدد الدشاديش)</label>
+                  <label className="text-sm font-bold">
+                    الكمية (عدد الدشاديش)
+                    {(!order.quantity || order.quantity <= 0) && (
+                      <span className="text-destructive mr-1">*</span>
+                    )}
+                  </label>
                   <Input 
                     type="text"
                     inputMode="numeric"
-                    value={order.quantity}
+                    value={order.quantity || ''}
+                    placeholder="أدخل الكمية..."
                     onChange={(e) => {
+                      const raw = toEnglishDigits(e.target.value).replace(/[^0-9]/g, '');
                       const newOrders = [...subOrders];
-                      newOrders[index].quantity = parseInt(toEnglishDigits(e.target.value)) || 1;
+                      newOrders[index].quantity = raw === '' ? 0 : parseInt(raw);
                       setSubOrders(newOrders);
                     }}
-                    className="h-14 bg-muted/50 rounded-xl text-center text-lg font-bold"
+                    className={`h-14 bg-muted/50 rounded-xl text-center text-lg font-bold ${(!order.quantity || order.quantity <= 0) ? 'border-destructive/50 focus:border-destructive' : ''}`}
                   />
                 </div>
 
@@ -237,7 +248,7 @@ export function InvoiceCreate() {
         <Button 
           variant="outline" 
           className="w-full h-14 border-dashed border-2 border-primary/30 text-primary hover:bg-primary/5 rounded-2xl font-bold text-lg"
-          onClick={() => setSubOrders([...subOrders, { profileId: 0, quantity: 1, fabricSource: 'shop_fabric', fabricDescription: '', price: 0, paidAmount: 0 }])}
+          onClick={() => setSubOrders([...subOrders, { profileId: 0, quantity: 0, fabricSource: 'shop_fabric', fabricDescription: '', price: 0, paidAmount: 0 }])}
         >
           <Plus className="w-5 h-5 ml-2" /> إضافة طلب آخر لنفس العميل
         </Button>
