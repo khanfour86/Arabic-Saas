@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { toEnglishDigits } from '@/lib/digits';
 import { useListInvoices, useGetInvoice, useMarkInvoiceDelivered, useGetWhatsappMessage, ListInvoicesStatus } from '@workspace/api-client-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -51,7 +52,7 @@ export function InvoicesList() {
             className="h-14 pl-4 pr-12 rounded-2xl bg-white shadow-sm border-0 focus-visible:ring-primary"
             placeholder="رقم الفاتورة أو هاتف العميل..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => setSearch(toEnglishDigits(e.target.value))}
           />
         </div>
         <div className="flex p-1 bg-muted/50 rounded-2xl overflow-x-auto shrink-0">

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { toEnglishDigits } from '@/lib/digits';
 import { useGetOwnerStats, useListShops, useCreateShop, useUpdateShop, ListShopsStatus } from '@workspace/api-client-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -307,7 +308,7 @@ function ShopCreateForm({ onSuccess }: { onSuccess: () => void }) {
           </div>
           <Input
             value={phone}
-            onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 8))}
+            onChange={e => setPhone(toEnglishDigits(e.target.value).replace(/\D/g, '').slice(0, 8))}
             required
             className={`bg-muted/50 rounded-xl font-mono tracking-widest ${phoneCheck.taken ? 'border-destructive focus-visible:ring-destructive' : ''}`}
             dir="ltr"

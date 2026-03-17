@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { toEnglishDigits } from '@/lib/digits';
 import { useGetShopDashboard, useListInvoices, useListCustomers } from '@workspace/api-client-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -57,7 +58,7 @@ function CustomerQuickSearch() {
         placeholder="بحث برقم الهاتف أو الاسم..."
         className="h-14 pr-12 pl-4 rounded-2xl bg-white shadow-md border-0 focus-visible:ring-primary/20 transition-all hover:shadow-lg text-lg"
         value={search}
-        onChange={(e) => setSearch(e.target.value)}
+        onChange={(e) => setSearch(toEnglishDigits(e.target.value))}
         onFocus={() => setInputFocused(true)}
         autoComplete="off"
         dir="rtl"

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { toEnglishDigits } from '@/lib/digits';
 import { useListCustomers, useCreateCustomer } from '@workspace/api-client-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -69,7 +70,7 @@ export function CustomersList() {
           className="h-16 pl-4 pr-14 text-lg rounded-2xl bg-white shadow-lg border-0 focus-visible:ring-accent"
           placeholder="ابحث برقم الهاتف (أرقام) أو اسم العميل..."
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => setSearch(toEnglishDigits(e.target.value))}
           onFocus={() => setInputFocused(true)}
           dir="rtl"
           autoComplete="off"
@@ -221,7 +222,7 @@ function CustomerCreateDialog({ trigger, initialPhone = '' }: { trigger?: React.
             <Input
               name="phone"
               value={phone}
-              onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 8))}
+              onChange={(e) => setPhone(toEnglishDigits(e.target.value).replace(/\D/g, '').slice(0, 8))}
               required
               className="bg-muted/50 rounded-xl h-12 font-mono text-xl tracking-widest"
               dir="ltr"
