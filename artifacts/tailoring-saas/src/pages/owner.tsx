@@ -269,8 +269,11 @@ function ShopCreateForm({ onSuccess }: { onSuccess: () => void }) {
 
   const today = new Date().toISOString().split('T')[0];
   const [shopName, setShopName] = useState('');
+  const [managerName, setManagerName] = useState('');
   const [phone, setPhone] = useState('');
+  const [area, setArea] = useState('');
   const [managerUsername, setManagerUsername] = useState('');
+  const [managerPassword, setManagerPassword] = useState('');
   const [subscriptionStart, setSubscriptionStart] = useState(today);
   const [durationMonths, setDurationMonths] = useState(12);
 
@@ -282,6 +285,15 @@ function ShopCreateForm({ onSuccess }: { onSuccess: () => void }) {
 
   const hasError = nameCheck.taken || phoneCheck.taken || usernameCheck.taken;
   const stillChecking = nameCheck.checking || phoneCheck.checking || usernameCheck.checking;
+
+  const allFilled =
+    shopName.trim().length > 0 &&
+    managerName.trim().length > 0 &&
+    phone.length === 8 &&
+    area.trim().length > 0 &&
+    subscriptionStart.length > 0 &&
+    managerUsername.trim().length > 0 &&
+    managerPassword.trim().length > 0;
 
   const mutation = useCreateShop({
     mutation: {
@@ -297,26 +309,18 @@ function ShopCreateForm({ onSuccess }: { onSuccess: () => void }) {
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (phone.length !== 8) {
-      toast({ title: 'خطأ', description: 'رقم الهاتف يجب أن يكون 8 أرقام', variant: 'destructive' });
-      return;
-    }
-    if (hasError) {
-      toast({ title: 'خطأ', description: 'يوجد بيانات مكررة، يرجى التصحيح أولاً', variant: 'destructive' });
-      return;
-    }
-    const fd = new FormData(e.currentTarget);
+    if (!allFilled || hasError || stillChecking) return;
     mutation.mutate({
       data: {
         name: shopName,
-        managerName: fd.get('managerName') as string,
+        managerName,
         phone,
-        area: fd.get('area') as string,
+        area,
         subscriptionStart,
         subscriptionEnd,
         subscriptionStatus: 'active',
         managerUsername,
-        managerPassword: fd.get('managerPassword') as string,
+        managerPassword,
       }
     });
   };
@@ -339,7 +343,11 @@ function ShopCreateForm({ onSuccess }: { onSuccess: () => void }) {
 
         <div className="space-y-2">
           <label className="text-sm font-bold">اسم المدير</label>
-          <Input name="managerName" required className="bg-muted/50 rounded-xl" />
+          <Input
+            value={managerName}
+            onChange={e => setManagerName(e.target.value)}
+            className="bg-muted/50 rounded-xl"
+          />
         </div>
 
         {/* Phone — 8 digits + uniqueness check */}
@@ -366,7 +374,11 @@ function ShopCreateForm({ onSuccess }: { onSuccess: () => void }) {
 
         <div className="space-y-2">
           <label className="text-sm font-bold">المنطقة</label>
-          <Input name="area" required className="bg-muted/50 rounded-xl" />
+          <Input
+            value={area}
+            onChange={e => setArea(e.target.value)}
+            className="bg-muted/50 rounded-xl"
+          />
         </div>
 
         {/* Subscription start */}
@@ -429,15 +441,21 @@ function ShopCreateForm({ onSuccess }: { onSuccess: () => void }) {
 
           <div className="space-y-2">
             <label className="text-sm font-bold">كلمة المرور</label>
-            <Input name="managerPassword" required className="bg-white rounded-xl" dir="ltr" />
+            <Input
+              value={managerPassword}
+              onChange={e => setManagerPassword(e.target.value)}
+              className="bg-white rounded-xl"
+              dir="ltr"
+            />
           </div>
         </div>
       </div>
 
+      {/* Submit — disabled until all fields are complete and no errors */}
       <Button
         type="submit"
         className="w-full h-12 rounded-xl text-lg font-bold"
-        disabled={mutation.isPending || phone.length !== 8 || hasError || stillChecking}
+        disabled={mutation.isPending || !allFilled || hasError || stillChecking}
       >
         {mutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : 'حفظ وإنشاء المحل'}
       </Button>
