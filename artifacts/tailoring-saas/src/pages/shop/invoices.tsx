@@ -159,8 +159,12 @@ export function InvoiceDetail() {
   const handleWhatsapp = async () => {
     const res = await getWhatsapp();
     if (res.data) {
-      navigator.clipboard.writeText(res.data.message);
-      toast({ title: 'تم نسخ الرسالة', description: 'يمكنك لصقها في واتساب الآن' });
+      const phone = res.data.phone || inv.customerPhone;
+      const cleanPhone = '965' + phone.replace(/\D/g, '').replace(/^965/, '');
+      const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(res.data.message)}`;
+      window.open(url, '_blank');
+    } else if (res.error) {
+      toast({ title: 'تعذّر إرسال الرسالة', description: (res.error as any)?.message ?? 'حدث خطأ', variant: 'destructive' });
     }
   };
 

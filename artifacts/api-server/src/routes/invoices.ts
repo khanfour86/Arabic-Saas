@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, invoicesTable, subOrdersTable, customersTable, profilesTable, measurementsTable } from "@workspace/db";
+import { db, invoicesTable, subOrdersTable, customersTable, profilesTable, measurementsTable, shopsTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { type AuthUser } from "../lib/auth";
 import { isShopUser, isManagerOrReception } from "../lib/shopMiddleware";
@@ -279,16 +279,34 @@ router.get("/shop/invoices/:invoiceId/whatsapp", isManagerOrReception, async (re
     return;
   }
 
+  const [customer] = await db.select().from(customersTable)
+    .where(eq(customersTable.id, invoice.customerId));
+  const [shop] = await db.select().from(shopsTable)
+    .where(eq(shopsTable.id, user.shopId!));
+
   const subOrders = await getSubOrdersForInvoice(user.shopId!, id);
+  const totalQty = subOrders.reduce((s, so) => s + so.quantity, 0);
   const totalAmount = subOrders.reduce((s, so) => s + so.price, 0);
   const paidAmount = subOrders.reduce((s, so) => s + so.paidAmount, 0);
   const remainingAmount = totalAmount - paidAmount;
 
-  const message = remainingAmount > 0
-    ? `عميلنا الكريم، تم الانتهاء من طلبكم رقم ${invoice.invoiceNumber}. يمكنكم التفضل بالاستلام من المحل. المبلغ المتبقي: ${remainingAmount.toFixed(3)} د.ك`
-    : `عميلنا الكريم، تم الانتهاء من طلبكم رقم ${invoice.invoiceNumber}. يمكنكم التفضل بالاستلام من المحل. جزاكم الله خيراً`;
+  const customerName = customer?.name ?? "عميلنا الكريم";
+  const shopName = shop?.name ?? "محلنا";
+  const phone = customer?.phone ?? "";
 
-  res.json({ message, invoiceNumber: invoice.invoiceNumber, remainingAmount });
+  const message =
+`السلام عليكم ${customerName} 🌿
+خياطة ${shopName}
+
+طلبك جاهز للاستلام ✅
+الكمية: ${totalQty} دشداشة
+الإجمالي: ${totalAmount.toFixed(3)} د.ك
+المدفوع: ${paidAmount.toFixed(3)} د.ك
+المتبقي: ${remainingAmount > 0 ? remainingAmount.toFixed(3) + ' د.ك' : 'لا يوجد متبقي ✓'}
+
+حياك تقدر تسلم طلبك في أي وقت 🙏`;
+
+  res.json({ message, phone, invoiceNumber: invoice.invoiceNumber, remainingAmount });
 });
 
 export default router;
