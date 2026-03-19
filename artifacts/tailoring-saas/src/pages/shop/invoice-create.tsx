@@ -119,7 +119,7 @@ export function InvoiceCreate() {
                             <span className="flex items-center gap-2">
                               {customer.name}
                               {p.isMain && <span className="text-xs bg-accent/30 text-accent-foreground px-1.5 py-0.5 rounded-full">رئيسي</span>}
-                              {p.isProof && <span className="text-xs bg-blue-500/20 text-blue-700 px-1.5 py-0.5 rounded-full">بروفا</span>}
+                              {p.isProof && <span className="text-xs bg-red-500/20 text-red-700 px-1.5 py-0.5 rounded-full">بروفا</span>}
                             </span>
                           </SelectItem>
                         ))}
