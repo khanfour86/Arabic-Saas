@@ -157,14 +157,16 @@ export function InvoiceDetail() {
   if (!inv) return <div>لا توجد فاتورة</div>;
 
   const handleWhatsapp = async () => {
+    // افتح النافذة فوراً قبل أي await — Safari يحجب window.open بعد async
+    const win = window.open('', '_blank');
     const res = await getWhatsapp();
-    if (res.data) {
+    if (res.data && win) {
       const phone = res.data.phone || inv.customerPhone;
       const cleanPhone = '965' + phone.replace(/\D/g, '').replace(/^965/, '');
-      const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(res.data.message)}`;
-      window.open(url, '_blank');
-    } else if (res.error) {
-      toast({ title: 'تعذّر إرسال الرسالة', description: (res.error as any)?.message ?? 'حدث خطأ', variant: 'destructive' });
+      win.location.href = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(res.data.message)}`;
+    } else {
+      win?.close();
+      toast({ title: 'تعذّر فتح واتساب', description: 'حدث خطأ في تحضير الرسالة', variant: 'destructive' });
     }
   };
 
