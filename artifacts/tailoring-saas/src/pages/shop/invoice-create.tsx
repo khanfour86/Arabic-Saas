@@ -55,12 +55,12 @@ export function InvoiceCreate() {
       toast({ title: 'خطأ', description: 'يجب إدخال الكمية (عدد الدشاديش) لكل طلب', variant: 'destructive' });
       return;
     }
-    if (subOrders.some(o => Number(o.price) <= 0)) {
-      toast({ title: 'خطأ', description: 'يجب إدخال السعر الإجمالي لكل طلب', variant: 'destructive' });
+    if (Number(subOrders[0].price) <= 0) {
+      toast({ title: 'خطأ', description: 'يجب إدخال السعر الإجمالي للفاتورة', variant: 'destructive' });
       return;
     }
-    if (subOrders.some(o => Number(o.paidAmount) > Number(o.price))) {
-      toast({ title: 'خطأ', description: 'المبلغ المدفوع لا يمكن أن يتجاوز سعر الطلب', variant: 'destructive' });
+    if (Number(subOrders[0].paidAmount) > Number(subOrders[0].price)) {
+      toast({ title: 'خطأ', description: 'المبلغ المدفوع لا يمكن أن يتجاوز سعر الفاتورة', variant: 'destructive' });
       return;
     }
     mutation.mutate({
@@ -183,58 +183,60 @@ export function InvoiceCreate() {
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-primary">السعر الإجمالي للطلب</label>
-                  <div className="relative">
-                    <Input 
-                      type="text"
-                      inputMode="decimal"
-                      value={order.price || ''}
-                      onChange={(e) => {
-                        const newPrice = parseFloat(toEnglishDigits(e.target.value)) || 0;
-                        const newOrders = [...subOrders];
-                        newOrders[index].price = newPrice;
-                        // If paid exceeds new price, cap it
-                        if (newOrders[index].paidAmount > newPrice) {
-                          newOrders[index].paidAmount = newPrice;
-                        }
-                        setSubOrders(newOrders);
-                      }}
-                      className="h-14 pl-12 bg-white border-primary/30 focus-visible:ring-primary rounded-xl text-xl font-bold text-primary"
-                    />
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold">د.ك</span>
+                {index === 0 && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-primary">السعر الإجمالي للفاتورة</label>
+                    <div className="relative">
+                      <Input 
+                        type="text"
+                        inputMode="decimal"
+                        value={order.price || ''}
+                        onChange={(e) => {
+                          const newPrice = parseFloat(toEnglishDigits(e.target.value)) || 0;
+                          const newOrders = [...subOrders];
+                          newOrders[0].price = newPrice;
+                          if (newOrders[0].paidAmount > newPrice) {
+                            newOrders[0].paidAmount = newPrice;
+                          }
+                          setSubOrders(newOrders);
+                        }}
+                        className="h-14 pl-12 bg-white border-primary/30 focus-visible:ring-primary rounded-xl text-xl font-bold text-primary"
+                      />
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold">د.ك</span>
+                    </div>
                   </div>
-                </div>
+                )}
 
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <label className="text-sm font-bold text-emerald-600">المبلغ المدفوع (مقدم)</label>
-                    {order.price > 0 && order.paidAmount === order.price && (
-                      <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">مدفوع بالكامل</span>
+                {index === 0 && (
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <label className="text-sm font-bold text-emerald-600">المبلغ المدفوع (مقدم)</label>
+                      {order.price > 0 && order.paidAmount === order.price && (
+                        <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">مدفوع بالكامل</span>
+                      )}
+                    </div>
+                    <div className="relative">
+                      <Input 
+                        type="text"
+                        inputMode="decimal"
+                        value={order.paidAmount || ''}
+                        onChange={(e) => {
+                          const paid = parseFloat(toEnglishDigits(e.target.value)) || 0;
+                          const newOrders = [...subOrders];
+                          newOrders[0].paidAmount = Math.min(paid, newOrders[0].price);
+                          setSubOrders(newOrders);
+                        }}
+                        className="h-14 pl-12 bg-white border-emerald-500/30 focus-visible:ring-emerald-500 rounded-xl text-xl font-bold text-emerald-600"
+                      />
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold">د.ك</span>
+                    </div>
+                    {order.price > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        المتبقي: <span className="font-bold text-foreground">{(order.price - order.paidAmount).toFixed(3)} د.ك</span>
+                      </p>
                     )}
                   </div>
-                  <div className="relative">
-                    <Input 
-                      type="text"
-                      inputMode="decimal"
-                      value={order.paidAmount || ''}
-                      onChange={(e) => {
-                        const paid = parseFloat(toEnglishDigits(e.target.value)) || 0;
-                        const newOrders = [...subOrders];
-                        // Clamp: paid cannot exceed price
-                        newOrders[index].paidAmount = Math.min(paid, newOrders[index].price);
-                        setSubOrders(newOrders);
-                      }}
-                      className="h-14 pl-12 bg-white border-emerald-500/30 focus-visible:ring-emerald-500 rounded-xl text-xl font-bold text-emerald-600"
-                    />
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold">د.ك</span>
-                  </div>
-                  {order.price > 0 && (
-                    <p className="text-xs text-muted-foreground">
-                      المتبقي: <span className="font-bold text-foreground">{(order.price - order.paidAmount).toFixed(3)} د.ك</span>
-                    </p>
-                  )}
-                </div>
+                )}
 
               </div>
               
