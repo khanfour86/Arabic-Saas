@@ -12,6 +12,81 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/lib/auth';
 
+function InlineEditPhone({ value, onSave, isPending }: { value: string; onSave: (v: string) => void; isPending: boolean }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const [error, setError] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { if (editing) { setDraft(value); setError(''); inputRef.current?.focus(); } }, [editing]);
+  useEffect(() => { if (!editing) setDraft(value); }, [value]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const digits = toEnglishDigits(e.target.value).replace(/\D/g, '').slice(0, 8);
+    setDraft(digits);
+    setError('');
+  };
+
+  const commit = () => {
+    if (draft.length !== 8) {
+      setError('يجب أن يكون الرقم 8 أرقام');
+      inputRef.current?.focus();
+      return;
+    }
+    if (draft === value) { setEditing(false); return; }
+    onSave(draft);
+    setEditing(false);
+    setError('');
+  };
+
+  const cancel = () => { setEditing(false); setDraft(value); setError(''); };
+
+  if (!editing) {
+    return (
+      <button
+        onClick={() => setEditing(true)}
+        className="group/edit flex items-center gap-2 hover:opacity-80 transition-opacity"
+        title="انقر لتعديل الرقم"
+        dir="ltr"
+      >
+        <span>{value}</span>
+        <Pencil className="w-3.5 h-3.5 opacity-0 group-hover/edit:opacity-60 transition-opacity shrink-0" />
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center gap-2">
+        <div className="relative">
+          <Input
+            ref={inputRef}
+            value={draft}
+            onChange={handleChange}
+            onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') cancel(); }}
+            className="h-9 text-lg font-bold bg-white/20 border-white/30 text-inherit placeholder:text-inherit/50 rounded-lg w-40 pr-2"
+            dir="ltr"
+            inputMode="numeric"
+            maxLength={8}
+            disabled={isPending}
+            placeholder="00000000"
+          />
+          <span className={`absolute left-2 top-1/2 -translate-y-1/2 text-xs font-mono ${draft.length === 8 ? 'text-green-300' : 'text-white/40'}`}>
+            {draft.length}/8
+          </span>
+        </div>
+        <Button size="icon" variant="ghost" className="h-8 w-8 text-inherit hover:bg-white/20 rounded-lg" onClick={commit} disabled={isPending}>
+          {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+        </Button>
+        <Button size="icon" variant="ghost" className="h-8 w-8 text-inherit hover:bg-white/20 rounded-lg" onClick={cancel} disabled={isPending}>
+          <X className="w-4 h-4" />
+        </Button>
+      </div>
+      {error && <span className="text-red-300 text-xs font-bold">{error}</span>}
+    </div>
+  );
+}
+
 function InlineEdit({ value, onSave, isPending }: { value: string; onSave: (v: string) => void; isPending: boolean }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
@@ -162,15 +237,11 @@ export function CustomerDetail() {
                 <div className="flex items-center gap-2 bg-black/20 px-3 py-1 rounded-lg">
                   <Phone className="w-4 h-4" />
                   {canEditPhone ? (
-                    <InlineEdit
+                    <InlineEditPhone
                       value={customer.phone}
                       isPending={updateCustomerMutation.isPending}
                       onSave={(phone) => {
-                        const cleaned = toEnglishDigits(phone).replace(/\D/g, '');
-                        if (cleaned.length !== 8) {
-                          return;
-                        }
-                        updateCustomerMutation.mutate({ customerId, data: { phone: cleaned } });
+                        updateCustomerMutation.mutate({ customerId, data: { phone } });
                       }}
                     />
                   ) : (
