@@ -84,9 +84,11 @@ function InlineEditPhone({
             disabled={isPending}
             placeholder=""
           />
-          <span className={`absolute left-2 top-1/2 -translate-y-1/2 text-xs font-mono pointer-events-none ${draft.length === 8 ? 'text-green-300' : 'text-white/40'}`}>
-            {draft.length}/8
-          </span>
+          {draft.length > 0 && (
+            <span className={`absolute left-2 top-1/2 -translate-y-1/2 text-xs font-mono pointer-events-none ${draft.length === 8 ? 'text-green-300' : 'text-white/40'}`}>
+              {draft.length}/8
+            </span>
+          )}
         </div>
         <Button size="icon" variant="ghost" className="h-8 w-8 text-white hover:bg-white/20 rounded-lg" onClick={commit} disabled={isPending}>
           {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
