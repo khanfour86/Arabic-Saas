@@ -108,15 +108,21 @@ export function InvoiceCreate() {
                       <SelectValue placeholder="اختر الشخص..." />
                     </SelectTrigger>
                     <SelectContent dir="rtl">
-                      {customer.profiles.map((p: any) => (
-                        <SelectItem key={p.id} value={p.id.toString()}>
-                          <span className="flex items-center gap-2">
-                            {p.name}
-                            {p.isMain && <span className="text-xs bg-accent/30 text-accent-foreground px-1.5 py-0.5 rounded-full">رئيسي</span>}
-                            {p.isProof && <span className="text-xs bg-blue-500/20 text-blue-700 px-1.5 py-0.5 rounded-full">بروفا</span>}
-                          </span>
-                        </SelectItem>
-                      ))}
+                      {[...customer.profiles]
+                        .sort((a: any, b: any) => {
+                          if (a.isMain !== b.isMain) return a.isMain ? -1 : 1;
+                          if (a.isProof !== b.isProof) return a.isProof ? -1 : 1;
+                          return 0;
+                        })
+                        .map((p: any) => (
+                          <SelectItem key={p.id} value={p.id.toString()}>
+                            <span className="flex items-center gap-2">
+                              {customer.name}
+                              {p.isMain && <span className="text-xs bg-accent/30 text-accent-foreground px-1.5 py-0.5 rounded-full">رئيسي</span>}
+                              {p.isProof && <span className="text-xs bg-blue-500/20 text-blue-700 px-1.5 py-0.5 rounded-full">بروفا</span>}
+                            </span>
+                          </SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                 </div>
