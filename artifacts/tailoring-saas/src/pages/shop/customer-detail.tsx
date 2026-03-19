@@ -82,7 +82,7 @@ function InlineEditPhone({
             inputMode="numeric"
             maxLength={8}
             disabled={isPending}
-            placeholder={value}
+            placeholder=""
           />
           <span className={`absolute left-2 top-1/2 -translate-y-1/2 text-xs font-mono pointer-events-none ${draft.length === 8 ? 'text-green-300' : 'text-white/40'}`}>
             {draft.length}/8
