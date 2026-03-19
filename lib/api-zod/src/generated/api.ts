@@ -257,6 +257,7 @@ export const UpdateCustomerParams = zod.object({
 export const UpdateCustomerBody = zod.object({
   name: zod.string().nullish(),
   notes: zod.string().nullish(),
+  phone: zod.string().nullish(),
 });
 
 export const UpdateCustomerResponse = zod.object({

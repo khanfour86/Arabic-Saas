@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
-import { useListShopUsers, useCreateShopUser, useDeleteShopUser, useExportCustomers, useExportInvoices } from '@workspace/api-client-react';
+import * as XLSX from 'xlsx';
+import { useListShopUsers, useCreateShopUser, useDeleteShopUser, useUpdateShopUser, useExportCustomers, useExportInvoices } from '@workspace/api-client-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Users, Download, Plus, Trash2, Loader2, Database } from 'lucide-react';
+import { Users, Download, Plus, Trash2, Loader2, Database, Pencil } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 
@@ -34,7 +35,7 @@ function UsersSection() {
   const { data, isLoading } = useListShopUsers();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  
+
   const deleteMutation = useDeleteShopUser({
     mutation: {
       onSuccess: () => {
@@ -66,14 +67,15 @@ function UsersSection() {
                   <h4 className="font-bold text-lg">{u.name}</h4>
                   <div className="text-sm text-muted-foreground" dir="ltr">{u.username}</div>
                 </div>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3">
                   <Badge variant="outline" className="rounded-full px-3 py-1">
                     {u.role === 'shop_manager' ? 'مدير' : u.role === 'reception' ? 'استقبال' : 'خياط'}
                   </Badge>
+                  <UserEditDialog user={u} />
                   {u.role !== 'shop_manager' && (
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
+                    <Button
+                      variant="ghost"
+                      size="icon"
                       className="text-red-500 hover:text-red-700 hover:bg-red-50"
                       onClick={() => {
                         if (confirm('هل أنت متأكد من الحذف؟')) deleteMutation.mutate({ userId: u.id });
@@ -89,6 +91,80 @@ function UsersSection() {
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function UserEditDialog({ user }: { user: any }) {
+  const [open, setOpen] = useState(false);
+  const [role, setRole] = useState(user.role);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const mutation = useUpdateShopUser({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ['/api/shop/users'] });
+        toast({ title: 'تم تحديث بيانات المستخدم' });
+        setOpen(false);
+      },
+      onError: () => toast({ title: 'خطأ في التحديث', variant: 'destructive' }),
+    }
+  });
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    const data: any = { role };
+    const name = fd.get('name') as string;
+    const password = fd.get('password') as string;
+    if (name) data.name = name;
+    if (password) data.password = password;
+    mutation.mutate({ userId: user.id, data });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); setRole(user.role); }}>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="icon" className="text-primary hover:bg-primary/10">
+          <Pencil className="w-4 h-4" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent dir="rtl" className="max-h-[90dvh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>تعديل: {user.name}</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+          <div className="space-y-2">
+            <label className="text-sm font-bold">الاسم الكامل</label>
+            <Input name="name" defaultValue={user.name} required className="bg-muted/50 rounded-xl" />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-bold">اسم المستخدم</label>
+            <Input value={user.username} disabled className="bg-muted/30 rounded-xl text-muted-foreground" dir="ltr" />
+            <p className="text-xs text-muted-foreground">اسم المستخدم لا يمكن تغييره</p>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-bold">كلمة المرور الجديدة</label>
+            <Input name="password" type="password" className="bg-muted/50 rounded-xl" dir="ltr" placeholder="اتركها فارغة إذا لم تريد التغيير" />
+          </div>
+          {user.role !== 'shop_manager' && (
+            <div className="space-y-2">
+              <label className="text-sm font-bold">الصلاحية</label>
+              <Select value={role} onValueChange={setRole}>
+                <SelectTrigger className="bg-muted/50 rounded-xl" dir="rtl"><SelectValue /></SelectTrigger>
+                <SelectContent dir="rtl">
+                  <SelectItem value="reception">استقبال</SelectItem>
+                  <SelectItem value="tailor">خياط</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          <Button type="submit" className="w-full h-12 rounded-xl mt-4" disabled={mutation.isPending}>
+            {mutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : 'حفظ التعديلات'}
+          </Button>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -124,7 +200,7 @@ function UserCreateDialog() {
       <DialogTrigger asChild>
         <Button className="rounded-xl gap-2 bg-primary text-white"><Plus className="w-4 h-4"/> إضافة مستخدم</Button>
       </DialogTrigger>
-      <DialogContent dir="rtl">
+      <DialogContent dir="rtl" className="max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>إضافة مستخدم جديد</DialogTitle>
         </DialogHeader>
@@ -139,7 +215,7 @@ function UserCreateDialog() {
           </div>
           <div className="space-y-2">
             <label className="text-sm font-bold">كلمة المرور</label>
-            <Input name="password" required className="bg-muted/50 rounded-xl" dir="ltr" />
+            <Input name="password" type="password" required className="bg-muted/50 rounded-xl" dir="ltr" />
           </div>
           <div className="space-y-2">
             <label className="text-sm font-bold">الصلاحية</label>
@@ -166,25 +242,83 @@ function ExportSection() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
 
-  const downloadJson = (data: any, filename: string) => {
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
+  const downloadExcel = (wb: XLSX.WorkBook, filename: string) => {
+    XLSX.writeFile(wb, filename);
   };
 
-  const handleExport = async (type: 'customers' | 'invoices') => {
+  const handleExportCustomers = async () => {
     setLoading(true);
     try {
-      const res = type === 'customers' ? await exportC() : await exportI();
-      if (res.data) {
-        downloadJson(res.data.data, `export_${type}_${new Date().toISOString().split('T')[0]}.json`);
-        toast({ title: 'تم تحميل الملف بنجاح' });
-      }
-    } catch (e) {
+      const res = await exportC();
+      if (!res.data) throw new Error();
+      const customers = res.data.data as any[];
+
+      const rows = customers.map(c => ({
+        'الاسم': c.name,
+        'الهاتف': c.phone,
+        'تاريخ الإضافة': c.createdAt ? new Date(c.createdAt).toLocaleDateString('ar-KW') : '',
+        'عدد الملفات': c.profiles?.length ?? 0,
+        'ملاحظات': c.notes ?? '',
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(rows, { skipHeader: false });
+      ws['!cols'] = [{ wch: 25 }, { wch: 15 }, { wch: 18 }, { wch: 14 }, { wch: 30 }];
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'العملاء');
+      downloadExcel(wb, `عملاء_${new Date().toISOString().split('T')[0]}.xlsx`);
+      toast({ title: 'تم تحميل ملف العملاء بنجاح' });
+    } catch {
+      toast({ title: 'خطأ في التصدير', variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleExportInvoices = async () => {
+    setLoading(true);
+    try {
+      const res = await exportI();
+      if (!res.data) throw new Error();
+      const invoices = res.data.data as any[];
+
+      const invRows = invoices.map(inv => ({
+        'رقم الفاتورة': inv.invoiceNumber,
+        'العميل': inv.customerName ?? '',
+        'الهاتف': inv.customerPhone ?? '',
+        'الإجمالي (د.ك)': Number(inv.totalAmount ?? 0).toFixed(3),
+        'المدفوع (د.ك)': Number(inv.paidAmount ?? 0).toFixed(3),
+        'المتبقي (د.ك)': Number(inv.remainingAmount ?? 0).toFixed(3),
+        'الحالة': inv.status === 'pending' ? 'تحت الخياطة' : inv.status === 'ready' ? 'جاهز' : 'تم التسليم',
+        'التاريخ': inv.createdAt ? new Date(inv.createdAt).toLocaleDateString('ar-KW') : '',
+      }));
+
+      const wsInv = XLSX.utils.json_to_sheet(invRows);
+      wsInv['!cols'] = [{ wch: 16 }, { wch: 22 }, { wch: 14 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 16 }];
+
+      const subRows = invoices.flatMap(inv =>
+        (inv.subOrders ?? []).map((so: any) => ({
+          'رقم الفاتورة': inv.invoiceNumber,
+          'رقم الطلب': so.subOrderNumber,
+          'الشخص': so.profileName ?? '',
+          'الكمية': so.quantity,
+          'مصدر القماش': so.fabricSource === 'shop_fabric' ? 'قماش المحل' : 'قماش العميل',
+          'تفاصيل القماش': so.fabricDescription ?? '',
+          'السعر (د.ك)': Number(so.price ?? 0).toFixed(3),
+          'المدفوع (د.ك)': Number(so.paidAmount ?? 0).toFixed(3),
+          'الحالة': so.status === 'ready' ? 'جاهز' : 'تحت الخياطة',
+        }))
+      );
+
+      const wsSub = XLSX.utils.json_to_sheet(subRows);
+      wsSub['!cols'] = [{ wch: 14 }, { wch: 12 }, { wch: 20 }, { wch: 10 }, { wch: 16 }, { wch: 22 }, { wch: 14 }, { wch: 14 }, { wch: 14 }];
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, wsInv, 'الفواتير');
+      XLSX.utils.book_append_sheet(wb, wsSub, 'تفاصيل الطلبات');
+      downloadExcel(wb, `فواتير_${new Date().toISOString().split('T')[0]}.xlsx`);
+      toast({ title: 'تم تحميل ملف الفواتير بنجاح' });
+    } catch {
       toast({ title: 'خطأ في التصدير', variant: 'destructive' });
     } finally {
       setLoading(false);
@@ -199,26 +333,26 @@ function ExportSection() {
         </div>
         <div>
           <h3 className="text-xl font-bold font-display mb-2">النسخ الاحتياطي والتصدير</h3>
-          <p className="text-primary-foreground/70 text-sm">تنزيل بيانات محلك بصيغة JSON كنسخة احتياطية.</p>
+          <p className="text-primary-foreground/70 text-sm">تنزيل بيانات محلك بصيغة Excel منظّمة.</p>
         </div>
-        
+
         <div className="w-full space-y-3 pt-4 border-t border-white/10">
-          <Button 
-            variant="secondary" 
+          <Button
+            variant="secondary"
             className="w-full h-12 rounded-xl justify-between group"
-            onClick={() => handleExport('customers')}
+            onClick={handleExportCustomers}
             disabled={loading}
           >
-            <span className="font-bold">تصدير العملاء</span>
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <span className="font-bold">تصدير العملاء</span>}
             <Download className="w-4 h-4 group-hover:-translate-y-1 transition-transform" />
           </Button>
-          <Button 
-            variant="secondary" 
+          <Button
+            variant="secondary"
             className="w-full h-12 rounded-xl justify-between group"
-            onClick={() => handleExport('invoices')}
+            onClick={handleExportInvoices}
             disabled={loading}
           >
-            <span className="font-bold">تصدير الفواتير</span>
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <span className="font-bold">تصدير الفواتير</span>}
             <Download className="w-4 h-4 group-hover:-translate-y-1 transition-transform" />
           </Button>
         </div>

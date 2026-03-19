@@ -137,7 +137,11 @@ router.patch("/shop/customers/:customerId", isShopUser, async (req, res): Promis
   }
 
   const [customer] = await db.update(customersTable)
-    .set({ name: parsed.data.name ?? undefined, notes: parsed.data.notes })
+    .set({
+      name: parsed.data.name ?? undefined,
+      notes: parsed.data.notes,
+      phone: parsed.data.phone ?? undefined,
+    })
     .where(and(eq(customersTable.shopId, user.shopId!), eq(customersTable.id, id)))
     .returning();
 

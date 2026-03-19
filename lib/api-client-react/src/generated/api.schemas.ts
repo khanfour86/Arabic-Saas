@@ -213,6 +213,8 @@ export interface UpdateCustomerBody {
   name?: string | null;
   /** @nullable */
   notes?: string | null;
+  /** @nullable */
+  phone?: string | null;
 }
 
 export interface Profile {

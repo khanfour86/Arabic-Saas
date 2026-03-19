@@ -121,12 +121,13 @@ export function CustomerDetail() {
   const { toast } = useToast();
 
   const canEdit = user?.role === 'shop_manager' || user?.role === 'reception';
+  const canEditPhone = user?.role === 'shop_manager';
 
   const updateCustomerMutation = useUpdateCustomer({
     mutation: {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: [`/api/shop/customers/${customerId}`] });
-        toast({ title: 'تم تحديث اسم العميل' });
+        toast({ title: 'تم التحديث بنجاح' });
       },
       onError: () => toast({ title: 'خطأ في التحديث', variant: 'destructive' }),
     }
@@ -160,7 +161,21 @@ export function CustomerDetail() {
               <div className="flex items-center gap-4 text-primary-foreground/80">
                 <div className="flex items-center gap-2 bg-black/20 px-3 py-1 rounded-lg">
                   <Phone className="w-4 h-4" />
-                  <span dir="ltr">{customer.phone}</span>
+                  {canEditPhone ? (
+                    <InlineEdit
+                      value={customer.phone}
+                      isPending={updateCustomerMutation.isPending}
+                      onSave={(phone) => {
+                        const cleaned = toEnglishDigits(phone).replace(/\D/g, '');
+                        if (cleaned.length !== 8) {
+                          return;
+                        }
+                        updateCustomerMutation.mutate({ customerId, data: { phone: cleaned } });
+                      }}
+                    />
+                  ) : (
+                    <span dir="ltr">{customer.phone}</span>
+                  )}
                 </div>
               </div>
             </div>
