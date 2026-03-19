@@ -12,14 +12,24 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/lib/auth';
 
-function InlineEditPhone({ value, onSave, isPending }: { value: string; onSave: (v: string) => void; isPending: boolean }) {
+function InlineEditPhone({
+  value,
+  onSave,
+  isPending,
+}: {
+  value: string;
+  onSave: (phone: string, onError: (msg: string) => void, onSuccess: () => void) => void;
+  isPending: boolean;
+}) {
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(value);
+  const [draft, setDraft] = useState('');
   const [error, setError] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { if (editing) { setDraft(value); setError(''); inputRef.current?.focus(); } }, [editing]);
-  useEffect(() => { if (!editing) setDraft(value); }, [value]);
+  const openEdit = () => { setDraft(''); setError(''); setEditing(true); };
+  const cancel   = () => { setEditing(false); setDraft(''); setError(''); };
+
+  useEffect(() => { if (editing) inputRef.current?.focus(); }, [editing]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const digits = toEnglishDigits(e.target.value).replace(/\D/g, '').slice(0, 8);
@@ -33,18 +43,18 @@ function InlineEditPhone({ value, onSave, isPending }: { value: string; onSave: 
       inputRef.current?.focus();
       return;
     }
-    if (draft === value) { setEditing(false); return; }
-    onSave(draft);
-    setEditing(false);
-    setError('');
+    if (draft === value) { cancel(); return; }
+    onSave(
+      draft,
+      (msg) => { setError(msg); inputRef.current?.focus(); },
+      () => { setEditing(false); setDraft(''); setError(''); }
+    );
   };
-
-  const cancel = () => { setEditing(false); setDraft(value); setError(''); };
 
   if (!editing) {
     return (
       <button
-        onClick={() => setEditing(true)}
+        onClick={openEdit}
         className="group/edit flex items-center gap-2 hover:opacity-80 transition-opacity"
         title="انقر لتعديل الرقم"
         dir="ltr"
@@ -56,7 +66,10 @@ function InlineEditPhone({ value, onSave, isPending }: { value: string; onSave: 
   }
 
   return (
-    <div className="flex flex-col gap-1">
+    <div
+      className="flex flex-col gap-1"
+      onKeyDown={(e) => { if (e.key === 'Escape') cancel(); }}
+    >
       <div className="flex items-center gap-2">
         <div className="relative">
           <Input
@@ -64,25 +77,25 @@ function InlineEditPhone({ value, onSave, isPending }: { value: string; onSave: 
             value={draft}
             onChange={handleChange}
             onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') cancel(); }}
-            className="h-9 text-lg font-bold bg-white/20 border-white/30 text-inherit placeholder:text-inherit/50 rounded-lg w-40 pr-2"
+            className="h-9 text-base font-bold bg-white/20 border-white/30 text-white placeholder:text-white/30 rounded-lg w-36"
             dir="ltr"
             inputMode="numeric"
             maxLength={8}
             disabled={isPending}
-            placeholder="00000000"
+            placeholder={value}
           />
-          <span className={`absolute left-2 top-1/2 -translate-y-1/2 text-xs font-mono ${draft.length === 8 ? 'text-green-300' : 'text-white/40'}`}>
+          <span className={`absolute left-2 top-1/2 -translate-y-1/2 text-xs font-mono pointer-events-none ${draft.length === 8 ? 'text-green-300' : 'text-white/40'}`}>
             {draft.length}/8
           </span>
         </div>
-        <Button size="icon" variant="ghost" className="h-8 w-8 text-inherit hover:bg-white/20 rounded-lg" onClick={commit} disabled={isPending}>
+        <Button size="icon" variant="ghost" className="h-8 w-8 text-white hover:bg-white/20 rounded-lg" onClick={commit} disabled={isPending}>
           {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
         </Button>
-        <Button size="icon" variant="ghost" className="h-8 w-8 text-inherit hover:bg-white/20 rounded-lg" onClick={cancel} disabled={isPending}>
+        <Button size="icon" variant="ghost" className="h-8 w-8 text-white hover:bg-white/20 rounded-lg" onClick={cancel} disabled={isPending}>
           <X className="w-4 h-4" />
         </Button>
       </div>
-      {error && <span className="text-red-300 text-xs font-bold">{error}</span>}
+      {error && <span className="text-red-300 text-xs font-bold mt-0.5">{error}</span>}
     </div>
   );
 }
@@ -240,8 +253,20 @@ export function CustomerDetail() {
                     <InlineEditPhone
                       value={customer.phone}
                       isPending={updateCustomerMutation.isPending}
-                      onSave={(phone) => {
-                        updateCustomerMutation.mutate({ customerId, data: { phone } });
+                      onSave={(phone, onError, onSuccess) => {
+                        updateCustomerMutation.mutate(
+                          { customerId, data: { phone } },
+                          {
+                            onSuccess: () => {
+                              queryClient.invalidateQueries({ queryKey: [`/api/shop/customers/${customerId}`] });
+                              onSuccess();
+                            },
+                            onError: (err: any) => {
+                              const msg = err?.data?.error ?? 'خطأ في التحديث';
+                              onError(msg);
+                            },
+                          }
+                        );
                       }}
                     />
                   ) : (

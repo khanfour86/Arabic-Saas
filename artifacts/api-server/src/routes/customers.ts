@@ -136,6 +136,24 @@ router.patch("/shop/customers/:customerId", isShopUser, async (req, res): Promis
     return;
   }
 
+  // Check duplicate phone — reject if another customer in this shop has the same number
+  if (parsed.data.phone) {
+    const [existing] = await db
+      .select({ id: customersTable.id })
+      .from(customersTable)
+      .where(
+        and(
+          eq(customersTable.shopId, user.shopId!),
+          eq(customersTable.phone, parsed.data.phone),
+        )
+      )
+      .limit(1);
+    if (existing && existing.id !== id) {
+      res.status(409).json({ error: "هذا الرقم مسجل مسبقاً لعميل آخر" });
+      return;
+    }
+  }
+
   const [customer] = await db.update(customersTable)
     .set({
       name: parsed.data.name ?? undefined,
