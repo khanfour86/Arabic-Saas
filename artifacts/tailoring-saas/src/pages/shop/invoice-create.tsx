@@ -223,18 +223,24 @@ export function InvoiceCreate() {
                         onChange={(e) => {
                           const paid = parseFloat(toEnglishDigits(e.target.value)) || 0;
                           const newOrders = [...subOrders];
-                          newOrders[0].paidAmount = Math.min(paid, newOrders[0].price);
+                          newOrders[0].paidAmount = paid;
                           setSubOrders(newOrders);
                         }}
-                        className="h-14 pl-12 bg-white border-emerald-500/30 focus-visible:ring-emerald-500 rounded-xl text-xl font-bold text-emerald-600"
+                        className={`h-14 pl-12 bg-white rounded-xl text-xl font-bold transition-colors ${
+                          order.paidAmount > order.price && order.price > 0
+                            ? 'border-red-500 border-2 focus-visible:ring-red-500 text-red-600'
+                            : 'border-emerald-500/30 focus-visible:ring-emerald-500 text-emerald-600'
+                        }`}
                       />
                       <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold">د.ك</span>
                     </div>
-                    {order.price > 0 && (
+                    {order.paidAmount > order.price && order.price > 0 ? (
+                      <p className="text-xs text-red-600 font-bold">المبلغ المدفوع لا يمكن أن يتجاوز السعر الإجمالي</p>
+                    ) : order.price > 0 ? (
                       <p className="text-xs text-muted-foreground">
                         المتبقي: <span className="font-bold text-foreground">{(order.price - order.paidAmount).toFixed(3)} د.ك</span>
                       </p>
-                    )}
+                    ) : null}
                   </div>
                 )}
 
