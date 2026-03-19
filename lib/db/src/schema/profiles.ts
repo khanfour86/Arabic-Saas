@@ -10,6 +10,7 @@ export const profilesTable = pgTable("profiles", {
   shopId: integer("shop_id").notNull().references(() => shopsTable.id),
   name: text("name").notNull(),
   isMain: boolean("is_main").notNull().default(false),
+  isProof: boolean("is_proof").notNull().default(false),
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

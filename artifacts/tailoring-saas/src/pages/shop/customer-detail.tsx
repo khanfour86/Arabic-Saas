@@ -290,7 +290,7 @@ export function CustomerDetail() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {customer.profiles.map(profile => (
+        {customer.profiles.filter((p: any) => !p.isProof).map(profile => (
           <ProfileCard
             key={profile.id}
             profile={profile}

@@ -180,6 +180,7 @@ export interface ProfileWithMeasurements {
   shopId: number;
   name: string;
   isMain: boolean;
+  isProof: boolean;
   /** @nullable */
   notes?: string | null;
   createdAt: string;
@@ -223,6 +224,7 @@ export interface Profile {
   shopId: number;
   name: string;
   isMain: boolean;
+  isProof: boolean;
   /** @nullable */
   notes?: string | null;
   createdAt: string;

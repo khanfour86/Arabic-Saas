@@ -85,12 +85,22 @@ router.post("/shop/customers", isShopUser, async (req, res): Promise<void> => {
     notes: parsed.data.notes,
   }).returning();
 
-  await db.insert(profilesTable).values({
-    customerId: customer.id,
-    shopId: user.shopId!,
-    name: parsed.data.name,
-    isMain: true,
-  });
+  await db.insert(profilesTable).values([
+    {
+      customerId: customer.id,
+      shopId: user.shopId!,
+      name: parsed.data.name,
+      isMain: true,
+      isProof: false,
+    },
+    {
+      customerId: customer.id,
+      shopId: user.shopId!,
+      name: 'بروفا',
+      isMain: false,
+      isProof: true,
+    },
+  ]);
 
   res.status(201).json(customer);
 });

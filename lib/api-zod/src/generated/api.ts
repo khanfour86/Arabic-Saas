@@ -227,6 +227,7 @@ export const GetCustomerResponse = zod.object({
       shopId: zod.number(),
       name: zod.string(),
       isMain: zod.boolean(),
+      isProof: zod.boolean(),
       notes: zod.string().nullish(),
       createdAt: zod.date(),
       measurements: zod
@@ -290,6 +291,7 @@ export const GetCustomerByPhoneResponse = zod.object({
       shopId: zod.number(),
       name: zod.string(),
       isMain: zod.boolean(),
+      isProof: zod.boolean(),
       notes: zod.string().nullish(),
       createdAt: zod.date(),
       measurements: zod
@@ -333,6 +335,7 @@ export const GetProfileResponse = zod.object({
   shopId: zod.number(),
   name: zod.string(),
   isMain: zod.boolean(),
+  isProof: zod.boolean(),
   notes: zod.string().nullish(),
   createdAt: zod.date(),
   measurements: zod
@@ -369,6 +372,7 @@ export const UpdateProfileResponse = zod.object({
   shopId: zod.number(),
   name: zod.string(),
   isMain: zod.boolean(),
+  isProof: zod.boolean(),
   notes: zod.string().nullish(),
   createdAt: zod.date(),
 });
