@@ -148,17 +148,16 @@ router.post("/shop/invoices", isManagerOrReception, async (req, res): Promise<vo
     return;
   }
 
-  for (const so of subOrders) {
-    const price = parseFloat(so.price) || 0;
-    const paid = parseFloat(so.paidAmount) || 0;
-    if (price <= 0) {
-      res.status(400).json({ error: "يجب إدخال سعر صحيح لكل طلب" });
-      return;
-    }
-    if (paid > price) {
-      res.status(400).json({ error: "المبلغ المدفوع لا يمكن أن يتجاوز سعر الطلب" });
-      return;
-    }
+  // السعر الإجمالي والمبلغ المدفوع يُدخلان فقط في الطلب الأول
+  const firstPrice = parseFloat(subOrders[0].price) || 0;
+  const firstPaid = parseFloat(subOrders[0].paidAmount) || 0;
+  if (firstPrice <= 0) {
+    res.status(400).json({ error: "يجب إدخال السعر الإجمالي للفاتورة" });
+    return;
+  }
+  if (firstPaid > firstPrice) {
+    res.status(400).json({ error: "المبلغ المدفوع لا يمكن أن يتجاوز السعر الإجمالي" });
+    return;
   }
 
   const [customer] = await db.select().from(customersTable)
