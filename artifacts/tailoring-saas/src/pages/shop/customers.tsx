@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { toEnglishDigits } from '@/lib/digits';
 import { useListCustomers, useCreateCustomer } from '@workspace/api-client-react';
+import { useTranslation } from '@/lib/i18n';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { User, Phone, Search, Plus, Loader2, ChevronLeft } from 'lucide-react';
+import { User, Phone, Search, Plus, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
@@ -23,6 +24,7 @@ export function CustomersList() {
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [, setLocation] = useLocation();
+  const { t, dir } = useTranslation();
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
@@ -30,7 +32,6 @@ export function CustomersList() {
   }, [search]);
 
   const { data, isLoading } = useListCustomers(buildParams(debouncedSearch));
-
   const customers = data?.customers ?? [];
   const showDropdown = inputFocused && search.length > 0 && customers.length > 0;
 
@@ -52,30 +53,30 @@ export function CustomersList() {
     setLocation(`/shop/customers/${customerId}`);
   };
 
+  const ChevronNav = dir === 'rtl' ? ChevronLeft : ChevronRight;
+
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-display font-bold text-primary">العملاء</h1>
-          <p className="text-muted-foreground mt-1">البحث وإدارة ملفات العملاء</p>
+          <h1 className="text-3xl font-display font-bold text-primary">{t('customersTitle')}</h1>
+          <p className="text-muted-foreground mt-1">{t('customersSubtitle')}</p>
         </div>
         <CustomerCreateDialog />
       </div>
 
-      {/* Search + autocomplete dropdown */}
       <div className="relative">
         <Search className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground w-6 h-6 pointer-events-none z-10" />
         <Input
           ref={inputRef}
           className="h-16 pl-4 pr-14 text-lg rounded-2xl bg-white shadow-lg border-0 focus-visible:ring-accent"
-          placeholder="ابحث برقم الهاتف (أرقام) أو اسم العميل..."
+          placeholder={t('searchCustomers')}
           value={search}
           onChange={(e) => setSearch(toEnglishDigits(e.target.value))}
           onFocus={() => setInputFocused(true)}
-          dir="rtl"
+          dir={dir}
           autoComplete="off"
         />
-
         {showDropdown && (
           <div
             ref={dropdownRef}
@@ -98,14 +99,13 @@ export function CustomersList() {
                     <span className="font-mono tracking-wide">{c.phone}</span>
                   </p>
                 </div>
-                <ChevronLeft className="w-4 h-4 text-muted-foreground shrink-0" />
+                <ChevronNav className="w-4 h-4 text-muted-foreground shrink-0" />
               </button>
             ))}
           </div>
         )}
       </div>
 
-      {/* Customer grid */}
       {isLoading ? (
         <div className="flex justify-center p-12">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -128,7 +128,7 @@ export function CustomersList() {
                       </div>
                     </div>
                   </div>
-                  <ChevronLeft className="text-muted-foreground group-hover:text-accent transition-colors" />
+                  <ChevronNav className="text-muted-foreground group-hover:text-accent transition-colors" />
                 </div>
               </Card>
             </Link>
@@ -138,11 +138,11 @@ export function CustomersList() {
             <div className="col-span-full p-12 text-center text-muted-foreground bg-white rounded-2xl shadow-sm">
               <User className="w-12 h-12 mx-auto text-muted/50 mb-4" />
               <p className="text-lg">
-                {debouncedSearch ? 'لا يوجد عملاء مطابقين للبحث' : 'لا يوجد عملاء بعد'}
+                {debouncedSearch ? t('noMatchCustomers') : t('noCustomers')}
               </p>
               {debouncedSearch && /^\d+$/.test(debouncedSearch) && (
                 <CustomerCreateDialog
-                  trigger={<Button variant="link" className="mt-2 text-accent">إضافة كعميل جديد؟</Button>}
+                  trigger={<Button variant="link" className="mt-2 text-accent">{t('addAsNew')}</Button>}
                   initialPhone={debouncedSearch}
                 />
               )}
@@ -160,6 +160,7 @@ function CustomerCreateDialog({ trigger, initialPhone = '' }: { trigger?: React.
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
+  const { t, dir } = useTranslation();
 
   useEffect(() => { setPhone(initialPhone); }, [initialPhone]);
 
@@ -167,13 +168,13 @@ function CustomerCreateDialog({ trigger, initialPhone = '' }: { trigger?: React.
     mutation: {
       onSuccess: (data) => {
         queryClient.invalidateQueries({ queryKey: ['/api/shop/customers'] });
-        toast({ title: 'تمت إضافة العميل بنجاح' });
+        toast({ title: t('customerAdded') });
         setOpen(false);
         setPhone('');
         setLocation(`/shop/customers/${data.id}`);
       },
       onError: (err: any) => {
-        toast({ title: 'خطأ', description: err?.message || 'رقم الهاتف مسجل مسبقاً', variant: 'destructive' });
+        toast({ title: t('error'), description: err?.message || t('phoneRegistered'), variant: 'destructive' });
       }
     }
   });
@@ -182,7 +183,7 @@ function CustomerCreateDialog({ trigger, initialPhone = '' }: { trigger?: React.
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     if (phone.length !== 8 || !/^\d{8}$/.test(phone)) {
-      toast({ title: 'خطأ', description: 'رقم الهاتف يجب أن يكون 8 أرقام', variant: 'destructive' });
+      toast({ title: t('error'), description: t('phoneMustBe8'), variant: 'destructive' });
       return;
     }
     mutation.mutate({
@@ -199,22 +200,22 @@ function CustomerCreateDialog({ trigger, initialPhone = '' }: { trigger?: React.
       <DialogTrigger asChild>
         {trigger || (
           <Button className="bg-primary text-white hover:bg-primary/90 shadow-lg rounded-xl gap-2 h-12 px-6">
-            <Plus className="w-5 h-5" /> إضافة عميل جديد
+            <Plus className="w-5 h-5" /> {t('addCustomer')}
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent dir="rtl" className="sm:max-w-md">
+      <DialogContent dir={dir} className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="font-display text-2xl">ملف عميل جديد</DialogTitle>
+          <DialogTitle className="font-display text-2xl">{t('newCustomerProfile')}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 mt-4">
           <div className="space-y-2">
-            <label className="text-sm font-bold">اسم العميل</label>
-            <Input name="name" required className="bg-muted/50 rounded-xl h-12" placeholder="الاسم الكامل" />
+            <label className="text-sm font-bold">{t('customerName')}</label>
+            <Input name="name" required className="bg-muted/50 rounded-xl h-12" placeholder={t('fullName')} />
           </div>
           <div className="space-y-2">
             <div className="flex justify-between items-center">
-              <label className="text-sm font-bold">رقم الهاتف</label>
+              <label className="text-sm font-bold">{t('phoneNumber')}</label>
               <span className={`text-xs font-mono ${phone.length === 8 ? 'text-green-600 font-bold' : 'text-muted-foreground'}`}>
                 {phone.length} / 8
               </span>
@@ -231,10 +232,10 @@ function CustomerCreateDialog({ trigger, initialPhone = '' }: { trigger?: React.
               inputMode="numeric"
               autoComplete="off"
             />
-            <p className="text-xs text-muted-foreground">أرقام فقط — بدون رمز الدولة (965)</p>
+            <p className="text-xs text-muted-foreground">{t('phoneHint')}</p>
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-bold">ملاحظات (اختياري)</label>
+            <label className="text-sm font-bold">{t('notes')}</label>
             <Input name="notes" className="bg-muted/50 rounded-xl h-12" />
           </div>
           <Button
@@ -242,7 +243,7 @@ function CustomerCreateDialog({ trigger, initialPhone = '' }: { trigger?: React.
             className="w-full h-14 rounded-xl text-lg font-bold mt-6"
             disabled={mutation.isPending || phone.length !== 8}
           >
-            {mutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : 'حفظ ومتابعة للقياسات'}
+            {mutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : t('saveContinue')}
           </Button>
         </form>
       </DialogContent>

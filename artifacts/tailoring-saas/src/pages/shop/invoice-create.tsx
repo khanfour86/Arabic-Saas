@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { toEnglishDigits } from '@/lib/digits';
 import { useGetCustomer, useCreateInvoice, CreateSubOrderInput } from '@workspace/api-client-react';
+import { useTranslation } from '@/lib/i18n';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +19,7 @@ export function InvoiceCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { t, dir } = useTranslation();
 
   const { data: customer, isLoading: customerLoading } = useGetCustomer(customerId, {
     query: { enabled: !!customerId }
@@ -32,35 +34,35 @@ export function InvoiceCreate() {
       onSuccess: (data) => {
         queryClient.invalidateQueries({ queryKey: ['/api/shop/invoices'] });
         queryClient.invalidateQueries({ queryKey: ['/api/shop/dashboard'] });
-        toast({ title: 'تم إنشاء الفاتورة بنجاح', description: `رقم الفاتورة: ${data.invoiceNumber}` });
+        toast({ title: t('invoiceCreated'), description: `${t('invoiceNumber')} ${data.invoiceNumber}` });
         setLocation(`/shop/invoices/${data.id}`);
       },
-      onError: (err) => toast({ title: 'خطأ', description: err.message, variant: 'destructive' })
+      onError: (err) => toast({ title: t('error'), description: err.message, variant: 'destructive' })
     }
   });
 
-  if (!customerId) return <div className="p-12 text-center text-red-500">يجب اختيار عميل أولاً</div>;
+  if (!customerId) return <div className="p-12 text-center text-red-500">{t('selectCustomerFirst')}</div>;
   if (customerLoading) return <div className="flex justify-center p-12"><Loader2 className="w-8 h-8 animate-spin" /></div>;
-  if (!customer) return <div>العميل غير موجود</div>;
+  if (!customer) return <div>{t('customerNotFound')}</div>;
 
   const totalAmount = subOrders.reduce((sum, o) => sum + (Number(o.price) || 0), 0);
   const totalPaid = subOrders.reduce((sum, o) => sum + (Number(o.paidAmount) || 0), 0);
 
   const handleSubmit = () => {
     if (subOrders.some(o => !o.profileId)) {
-      toast({ title: 'خطأ', description: 'يجب اختيار ملف القياس لكل طلب', variant: 'destructive' });
+      toast({ title: t('error'), description: t('mustSelectProfile'), variant: 'destructive' });
       return;
     }
     if (subOrders.some(o => !o.quantity || Number(o.quantity) <= 0)) {
-      toast({ title: 'خطأ', description: 'يجب إدخال الكمية (عدد الدشاديش) لكل طلب', variant: 'destructive' });
+      toast({ title: t('error'), description: t('mustEnterQty'), variant: 'destructive' });
       return;
     }
     if (Number(subOrders[0].price) <= 0) {
-      toast({ title: 'خطأ', description: 'يجب إدخال السعر الإجمالي للفاتورة', variant: 'destructive' });
+      toast({ title: t('error'), description: t('mustEnterPrice'), variant: 'destructive' });
       return;
     }
     if (Number(subOrders[0].paidAmount) > Number(subOrders[0].price)) {
-      toast({ title: 'خطأ', description: 'المبلغ المدفوع لا يمكن أن يتجاوز سعر الفاتورة', variant: 'destructive' });
+      toast({ title: t('error'), description: t('paidExceedsPriceToast'), variant: 'destructive' });
       return;
     }
     mutation.mutate({
@@ -78,7 +80,7 @@ export function InvoiceCreate() {
           <Scissors className="w-8 h-8 text-primary" />
         </div>
         <div>
-          <h1 className="text-3xl font-display font-bold text-primary">إنشاء فاتورة جديدة</h1>
+          <h1 className="text-3xl font-display font-bold text-primary">{t('createInvoiceTitle')}</h1>
           <div className="flex items-center gap-2 mt-1 text-muted-foreground font-medium">
             <User className="w-4 h-4" /> {customer.name} - <span dir="ltr">{customer.phone}</span>
           </div>
@@ -95,7 +97,7 @@ export function InvoiceCreate() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 
                 <div className="space-y-2 md:col-span-2">
-                  <label className="text-sm font-bold">ملف القياس (الشخص)</label>
+                  <label className="text-sm font-bold">{t('profileLabel')}</label>
                   <Select 
                     value={order.profileId ? order.profileId.toString() : ''} 
                     onValueChange={(v) => {
@@ -104,10 +106,10 @@ export function InvoiceCreate() {
                       setSubOrders(newOrders);
                     }}
                   >
-                    <SelectTrigger className="h-14 bg-muted/50 rounded-xl text-lg font-bold" dir="rtl">
-                      <SelectValue placeholder="اختر الشخص..." />
+                    <SelectTrigger className="h-14 bg-muted/50 rounded-xl text-lg font-bold" dir={dir}>
+                      <SelectValue placeholder={t('choosePerson')} />
                     </SelectTrigger>
-                    <SelectContent dir="rtl">
+                    <SelectContent dir={dir}>
                       {[...customer.profiles]
                         .sort((a: any, b: any) => {
                           if (a.isMain !== b.isMain) return a.isMain ? -1 : 1;
@@ -118,8 +120,8 @@ export function InvoiceCreate() {
                           <SelectItem key={p.id} value={p.id.toString()}>
                             <span className="flex items-center gap-2">
                               {customer.name}
-                              {p.isMain && <span className="text-xs bg-accent/30 text-accent-foreground px-1.5 py-0.5 rounded-full">رئيسي</span>}
-                              {p.isProof && <span className="text-xs bg-orange-500/20 text-orange-700 px-1.5 py-0.5 rounded-full">بروفا</span>}
+                              {p.isMain && <span className="text-xs bg-accent/30 text-accent-foreground px-1.5 py-0.5 rounded-full">{t('badgeMain')}</span>}
+                              {p.isProof && <span className="text-xs bg-orange-500/20 text-orange-700 px-1.5 py-0.5 rounded-full">{t('badgeProof')}</span>}
                             </span>
                           </SelectItem>
                         ))}
@@ -129,7 +131,7 @@ export function InvoiceCreate() {
 
                 <div className="space-y-2">
                   <label className="text-sm font-bold">
-                    الكمية (عدد الدشاديش)
+                    {t('quantityLabel')}
                     {(!order.quantity || order.quantity <= 0) && (
                       <span className="text-destructive mr-1">*</span>
                     )}
@@ -138,7 +140,7 @@ export function InvoiceCreate() {
                     type="text"
                     inputMode="numeric"
                     value={order.quantity || ''}
-                    placeholder="أدخل الكمية..."
+                    placeholder={t('enterQty')}
                     onChange={(e) => {
                       const raw = toEnglishDigits(e.target.value).replace(/[^0-9]/g, '');
                       const newOrders = [...subOrders];
@@ -150,7 +152,7 @@ export function InvoiceCreate() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-bold">مصدر القماش</label>
+                  <label className="text-sm font-bold">{t('fabricSource')}</label>
                   <Select 
                     value={order.fabricSource} 
                     onValueChange={(v: any) => {
@@ -159,18 +161,18 @@ export function InvoiceCreate() {
                       setSubOrders(newOrders);
                     }}
                   >
-                    <SelectTrigger className="h-14 bg-muted/50 rounded-xl font-bold" dir="rtl">
+                    <SelectTrigger className="h-14 bg-muted/50 rounded-xl font-bold" dir={dir}>
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent dir="rtl">
-                      <SelectItem value="shop_fabric">قماش المحل</SelectItem>
-                      <SelectItem value="customer_fabric">قماش العميل</SelectItem>
+                    <SelectContent dir={dir}>
+                      <SelectItem value="shop_fabric">{t('shopFabric')}</SelectItem>
+                      <SelectItem value="customer_fabric">{t('customerFabric')}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div className="space-y-2 md:col-span-2">
-                  <label className="text-sm font-bold">تفاصيل القماش / ملاحظات التفصيل</label>
+                  <label className="text-sm font-bold">{t('fabricDetails')}</label>
                   <Input 
                     value={order.fabricDescription || ''}
                     onChange={(e) => {
@@ -179,13 +181,13 @@ export function InvoiceCreate() {
                       setSubOrders(newOrders);
                     }}
                     className="h-14 bg-muted/50 rounded-xl"
-                    placeholder="لون، رقم القماش، نوع التفصيل..."
+                    placeholder={t('fabricDetailsHint')}
                   />
                 </div>
 
                 {index === 0 && (
                   <div className="space-y-2">
-                    <label className="text-sm font-bold text-primary">السعر الإجمالي للفاتورة</label>
+                    <label className="text-sm font-bold text-primary">{t('totalPriceLabel')}</label>
                     <div className="relative">
                       <Input 
                         type="text"
@@ -201,8 +203,9 @@ export function InvoiceCreate() {
                           setSubOrders(newOrders);
                         }}
                         className="h-14 pl-12 bg-white border-primary/30 focus-visible:ring-primary rounded-xl text-xl font-bold text-primary"
+                        dir="ltr"
                       />
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold">د.ك</span>
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold">{t('kwd')}</span>
                     </div>
                   </div>
                 )}
@@ -210,9 +213,9 @@ export function InvoiceCreate() {
                 {index === 0 && (
                   <div className="space-y-2">
                     <div className="flex justify-between items-center">
-                      <label className="text-sm font-bold text-emerald-600">المبلغ المدفوع (مقدم)</label>
+                      <label className="text-sm font-bold text-emerald-600">{t('paidAmountLabel')}</label>
                       {order.price > 0 && order.paidAmount === order.price && (
-                        <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">مدفوع بالكامل</span>
+                        <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">{t('fullyPaid')}</span>
                       )}
                     </div>
                     <div className="relative">
@@ -231,14 +234,15 @@ export function InvoiceCreate() {
                             ? 'border-red-500 border-2 focus-visible:ring-red-500 text-red-600'
                             : 'border-emerald-500/30 focus-visible:ring-emerald-500 text-emerald-600'
                         }`}
+                        dir="ltr"
                       />
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold">د.ك</span>
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold">{t('kwd')}</span>
                     </div>
                     {order.paidAmount > order.price && order.price > 0 ? (
-                      <p className="text-xs text-red-600 font-bold">المبلغ المدفوع لا يمكن أن يتجاوز السعر الإجمالي</p>
+                      <p className="text-xs text-red-600 font-bold">{t('paidExceedsTotal')}</p>
                     ) : order.price > 0 ? (
                       <p className="text-xs text-muted-foreground">
-                        المتبقي: <span className="font-bold text-foreground">{(order.price - order.paidAmount).toFixed(3)} د.ك</span>
+                        {t('remaining')} <span className="font-bold text-foreground">{(order.price - order.paidAmount).toFixed(3)} {t('kwd')}</span>
                       </p>
                     ) : null}
                   </div>
@@ -257,7 +261,7 @@ export function InvoiceCreate() {
                       setSubOrders(newOrders);
                     }}
                   >
-                    <Trash2 className="w-4 h-4 ml-2" /> إزالة هذا الطلب
+                    <Trash2 className="w-4 h-4 ml-2" /> {t('removeOrder')}
                   </Button>
                 </div>
               )}
@@ -270,24 +274,23 @@ export function InvoiceCreate() {
           className="w-full h-14 border-dashed border-2 border-primary/30 text-primary hover:bg-primary/5 rounded-2xl font-bold text-lg"
           onClick={() => setSubOrders([...subOrders, { profileId: 0, quantity: 0, fabricSource: 'shop_fabric', fabricDescription: '', price: 0, paidAmount: 0 }])}
         >
-          <Plus className="w-5 h-5 ml-2" /> إضافة طلب آخر لنفس العميل
+          <Plus className="w-5 h-5 ml-2" /> {t('addAnotherOrder')}
         </Button>
       </div>
 
-      {/* Sticky Bottom Bar for Totals & Submit */}
       <div className="sticky bottom-4 md:bottom-8 mt-12 bg-white/80 backdrop-blur-xl border border-border shadow-2xl rounded-3xl p-4 flex flex-col md:flex-row items-center justify-between gap-4 z-40">
         <div className="flex gap-6 w-full md:w-auto px-4 justify-between">
           <div>
-            <div className="text-xs text-muted-foreground font-bold">إجمالي الفاتورة</div>
-            <div className="text-2xl font-display font-bold text-primary">{totalAmount} د.ك</div>
+            <div className="text-xs text-muted-foreground font-bold">{t('invoiceTotalBar')}</div>
+            <div className="text-2xl font-display font-bold text-primary">{totalAmount} {t('kwd')}</div>
           </div>
           <div>
-            <div className="text-xs text-muted-foreground font-bold">المدفوع</div>
-            <div className="text-2xl font-display font-bold text-emerald-600">{totalPaid} د.ك</div>
+            <div className="text-xs text-muted-foreground font-bold">{t('colPaid')}</div>
+            <div className="text-2xl font-display font-bold text-emerald-600">{totalPaid} {t('kwd')}</div>
           </div>
           <div>
-            <div className="text-xs text-muted-foreground font-bold">المتبقي</div>
-            <div className="text-2xl font-display font-bold text-red-500">{totalAmount - totalPaid} د.ك</div>
+            <div className="text-xs text-muted-foreground font-bold">{t('colRemaining')}</div>
+            <div className="text-2xl font-display font-bold text-red-500">{totalAmount - totalPaid} {t('kwd')}</div>
           </div>
         </div>
         
@@ -296,7 +299,7 @@ export function InvoiceCreate() {
           onClick={handleSubmit}
           disabled={mutation.isPending}
         >
-          {mutation.isPending ? <Loader2 className="w-6 h-6 animate-spin" /> : <><Save className="w-5 h-5 ml-2" /> حفظ وإصدار الفاتورة</>}
+          {mutation.isPending ? <Loader2 className="w-6 h-6 animate-spin" /> : <><Save className="w-5 h-5 ml-2" /> {t('saveInvoice')}</>}
         </Button>
       </div>
     </div>

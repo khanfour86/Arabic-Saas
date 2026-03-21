@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { toEnglishDigits } from '@/lib/digits';
 import { useGetCustomer, useCreateProfile, useUpsertMeasurements, useUpdateCustomer, useUpdateProfile } from '@workspace/api-client-react';
+import { useTranslation } from '@/lib/i18n';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,10 +17,12 @@ function InlineEditPhone({
   value,
   onSave,
   isPending,
+  t,
 }: {
   value: string;
   onSave: (phone: string, onError: (msg: string) => void, onSuccess: () => void) => void;
   isPending: boolean;
+  t: (k: any) => string;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
@@ -39,7 +42,7 @@ function InlineEditPhone({
 
   const commit = () => {
     if (draft.length !== 8) {
-      setError('يجب أن يكون الرقم 8 أرقام');
+      setError(t('mustBe8Digits'));
       inputRef.current?.focus();
       return;
     }
@@ -56,7 +59,7 @@ function InlineEditPhone({
       <button
         onClick={openEdit}
         className="group/edit flex items-center gap-2 hover:opacity-80 transition-opacity"
-        title="انقر لتعديل الرقم"
+        title={t('clickToEditPhone')}
         dir="ltr"
       >
         <span>{value}</span>
@@ -97,7 +100,7 @@ function InlineEditPhone({
   );
 }
 
-function InlineEdit({ value, onSave, isPending }: { value: string; onSave: (v: string) => void; isPending: boolean }) {
+function InlineEdit({ value, onSave, isPending, clickToEdit }: { value: string; onSave: (v: string) => void; isPending: boolean; clickToEdit: string }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -119,7 +122,7 @@ function InlineEdit({ value, onSave, isPending }: { value: string; onSave: (v: s
       <button
         onClick={() => setEditing(true)}
         className="group/edit flex items-center gap-2 text-right hover:opacity-80 transition-opacity"
-        title="انقر للتعديل"
+        title={clickToEdit}
       >
         <span>{value}</span>
         <Pencil className="w-3.5 h-3.5 opacity-0 group-hover/edit:opacity-60 transition-opacity shrink-0" />
@@ -147,7 +150,7 @@ function InlineEdit({ value, onSave, isPending }: { value: string; onSave: (v: s
   );
 }
 
-function InlineEditDark({ value, onSave, isPending }: { value: string; onSave: (v: string) => void; isPending: boolean }) {
+function InlineEditDark({ value, onSave, isPending, clickToEdit }: { value: string; onSave: (v: string) => void; isPending: boolean; clickToEdit: string }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -169,7 +172,7 @@ function InlineEditDark({ value, onSave, isPending }: { value: string; onSave: (
       <button
         onClick={() => setEditing(true)}
         className="group/edit flex items-center gap-2 text-right hover:opacity-80 transition-opacity"
-        title="انقر للتعديل"
+        title={clickToEdit}
       >
         <span>{value}</span>
         <Pencil className="w-3.5 h-3.5 opacity-0 group-hover/edit:opacity-50 transition-opacity shrink-0 text-muted-foreground" />
@@ -204,6 +207,7 @@ export function CustomerDetail() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { t } = useTranslation();
 
   const canEdit = user?.role === 'shop_manager' || user?.role === 'reception';
   const canEditPhone = user?.role === 'shop_manager';
@@ -212,14 +216,14 @@ export function CustomerDetail() {
     mutation: {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: [`/api/shop/customers/${customerId}`] });
-        toast({ title: 'تم التحديث بنجاح' });
+        toast({ title: t('updatedSuccess') });
       },
-      onError: () => toast({ title: 'خطأ في التحديث', variant: 'destructive' }),
+      onError: () => toast({ title: t('updateError'), variant: 'destructive' }),
     }
   });
 
   if (isLoading) return <div className="flex justify-center p-12"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
-  if (!customer) return <div>لم يتم العثور على العميل</div>;
+  if (!customer) return <div>{t('customerNotFound')}</div>;
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -237,6 +241,7 @@ export function CustomerDetail() {
                   <InlineEdit
                     value={customer.name}
                     isPending={updateCustomerMutation.isPending}
+                    clickToEdit={t('clickToEdit')}
                     onSave={(name) => updateCustomerMutation.mutate({ customerId, data: { name } })}
                   />
                 </div>
@@ -250,6 +255,7 @@ export function CustomerDetail() {
                     <InlineEditPhone
                       value={customer.phone}
                       isPending={updateCustomerMutation.isPending}
+                      t={t}
                       onSave={(phone, onError, onSuccess) => {
                         updateCustomerMutation.mutate(
                           { customerId, data: { phone } },
@@ -259,7 +265,7 @@ export function CustomerDetail() {
                               onSuccess();
                             },
                             onError: (err: any) => {
-                              const msg = err?.data?.error ?? 'خطأ في التحديث';
+                              const msg = err?.data?.error ?? t('updateError');
                               onError(msg);
                             },
                           }
@@ -275,7 +281,7 @@ export function CustomerDetail() {
           </div>
           <Link href={`/shop/invoices/new?customerId=${customer.id}`}>
             <Button className="bg-accent text-accent-foreground hover:bg-accent/90 shadow-lg shadow-accent/20 rounded-xl h-14 px-8 text-lg font-bold gap-2 hover:-translate-y-1 transition-all w-full md:w-auto">
-              <FilePlus className="w-6 h-6" /> فاتورة جديدة
+              <FilePlus className="w-6 h-6" /> {t('newInvoice')}
             </Button>
           </Link>
         </CardContent>
@@ -284,18 +290,19 @@ export function CustomerDetail() {
       <div className="flex items-center justify-between mt-8 mb-4">
         <h2 className="text-2xl font-display font-bold text-primary flex items-center gap-2">
           <div className="w-2 h-6 bg-accent rounded-full" />
-          ملفات القياس ({customer.profiles.length})
+          {t('measurementProfiles')} ({customer.profiles.filter((p: any) => !p.isProof).length})
         </h2>
-        <ProfileCreateDialog customerId={customer.id} />
+        <ProfileCreateDialog customerId={customer.id} t={t} />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {customer.profiles.filter((p: any) => !p.isProof).map(profile => (
+        {customer.profiles.filter((p: any) => !p.isProof).map((profile: any) => (
           <ProfileCard
             key={profile.id}
             profile={profile}
             customerId={customer.id}
             canEdit={canEdit}
+            t={t}
           />
         ))}
       </div>
@@ -303,7 +310,7 @@ export function CustomerDetail() {
   );
 }
 
-function ProfileCard({ profile, customerId, canEdit }: { profile: any; customerId: number; canEdit: boolean }) {
+function ProfileCard({ profile, customerId, canEdit, t }: { profile: any; customerId: number; canEdit: boolean; t: (k: any) => string }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -311,9 +318,9 @@ function ProfileCard({ profile, customerId, canEdit }: { profile: any; customerI
     mutation: {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: [`/api/shop/customers/${customerId}`] });
-        toast({ title: 'تم تحديث اسم الملف' });
+        toast({ title: t('profileUpdated') });
       },
-      onError: () => toast({ title: 'خطأ في التحديث', variant: 'destructive' }),
+      onError: () => toast({ title: t('updateError'), variant: 'destructive' }),
     }
   });
 
@@ -330,13 +337,14 @@ function ProfileCard({ profile, customerId, canEdit }: { profile: any; customerI
                 <InlineEditDark
                   value={profile.name}
                   isPending={updateProfileMutation.isPending}
+                  clickToEdit={t('clickToEdit')}
                   onSave={(name) => updateProfileMutation.mutate({ profileId: profile.id, data: { name } })}
                 />
               ) : (
                 <span>{profile.name}</span>
               )}
               {profile.isMain && (
-                <span className="text-[10px] bg-accent/20 text-accent-foreground px-2 py-0.5 rounded-full">رئيسي</span>
+                <span className="text-[10px] bg-accent/20 text-accent-foreground px-2 py-0.5 rounded-full">{t('badgeMain')}</span>
               )}
             </div>
             {profile.notes && <p className="text-sm text-muted-foreground mt-1">{profile.notes}</p>}
@@ -348,11 +356,11 @@ function ProfileCard({ profile, customerId, canEdit }: { profile: any; customerI
             <>
               <div className="grid grid-cols-5 gap-2 text-center text-sm">
                 {[
-                  { label: 'الطول', value: m.length },
-                  { label: 'الكتف', value: m.shoulder },
-                  { label: 'الصدر', value: m.chest },
-                  { label: 'الكم',   value: m.sleeve },
-                  { label: 'الياقة', value: m.neck },
+                  { label: t('mLength'), value: m.length },
+                  { label: t('mShoulder'), value: m.shoulder },
+                  { label: t('mChest'), value: m.chest },
+                  { label: t('mSleeve'), value: m.sleeve },
+                  { label: t('mNeck'), value: m.neck },
                 ].map(({ label, value }) => (
                   <div key={label} className="bg-white p-2 rounded-lg shadow-sm">
                     <div className="text-muted-foreground text-xs mb-1">{label}</div>
@@ -365,7 +373,7 @@ function ProfileCard({ profile, customerId, canEdit }: { profile: any; customerI
                 <div className="bg-accent/10 border border-accent/20 rounded-xl p-3 flex gap-2 items-start">
                   <Scissors className="w-4 h-4 text-accent-foreground mt-0.5 shrink-0" />
                   <div>
-                    <div className="text-xs font-bold text-accent-foreground mb-0.5">ملاحظات الموديل</div>
+                    <div className="text-xs font-bold text-accent-foreground mb-0.5">{t('modelNotes')}</div>
                     <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{m.modelNotes}</p>
                   </div>
                 </div>
@@ -375,7 +383,7 @@ function ProfileCard({ profile, customerId, canEdit }: { profile: any; customerI
                 <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 flex gap-2 items-start">
                   <StickyNote className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
                   <div>
-                    <div className="text-xs font-bold text-blue-600 mb-0.5">ملاحظات عامة</div>
+                    <div className="text-xs font-bold text-blue-600 mb-0.5">{t('generalNotes')}</div>
                     <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{m.generalNotes}</p>
                   </div>
                 </div>
@@ -384,26 +392,27 @@ function ProfileCard({ profile, customerId, canEdit }: { profile: any; customerI
           ) : (
             <div className="text-center py-4 text-muted-foreground flex flex-col items-center gap-2">
               <Ruler className="w-6 h-6 opacity-50" />
-              لا توجد قياسات مسجلة
+              {t('noMeasurements')}
             </div>
           )}
         </div>
 
-        <MeasurementsDialog profile={profile} customerId={customerId} />
+        <MeasurementsDialog profile={profile} customerId={customerId} t={t} />
       </CardContent>
     </Card>
   );
 }
 
-function ProfileCreateDialog({ customerId }: { customerId: number }) {
+function ProfileCreateDialog({ customerId, t }: { customerId: number; t: (k: any) => string }) {
   const [open, setOpen] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { dir } = useTranslation();
   const mutation = useCreateProfile({
     mutation: {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: [`/api/shop/customers/${customerId}`] });
-        toast({ title: 'تم إضافة الملف بنجاح' });
+        toast({ title: t('profileAdded') });
         setOpen(false);
       }
     }
@@ -419,20 +428,20 @@ function ProfileCreateDialog({ customerId }: { customerId: number }) {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button variant="outline" className="rounded-xl gap-2 font-bold bg-white shadow-sm border-primary/20 text-primary">
-          <Plus className="w-4 h-4" /> إضافة شخص آخر
+          <Plus className="w-4 h-4" /> {t('addAnotherPerson')}
         </Button>
       </DialogTrigger>
-      <DialogContent dir="rtl">
+      <DialogContent dir={dir}>
         <DialogHeader>
-          <DialogTitle>إضافة ملف قياسات جديد</DialogTitle>
+          <DialogTitle>{t('addProfileTitle')}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 mt-4">
           <div className="space-y-2">
-            <label className="text-sm font-bold">اسم الشخص (مثال: الابن أحمد)</label>
+            <label className="text-sm font-bold">{t('personNameHint')}</label>
             <Input name="name" required className="bg-muted/50 rounded-xl" />
           </div>
           <Button type="submit" className="w-full h-12 rounded-xl" disabled={mutation.isPending}>
-            {mutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : 'حفظ'}
+            {mutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : t('saveBtn')}
           </Button>
         </form>
       </DialogContent>
@@ -440,19 +449,20 @@ function ProfileCreateDialog({ customerId }: { customerId: number }) {
   );
 }
 
-function MeasurementsDialog({ profile, customerId }: { profile: any; customerId: number }) {
+function MeasurementsDialog({ profile, customerId, t }: { profile: any; customerId: number; t: (k: any) => string }) {
   const [open, setOpen] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { dir } = useTranslation();
   const mutation = useUpsertMeasurements({
     mutation: {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: [`/api/shop/customers/${customerId}`] });
-        toast({ title: 'تم حفظ القياسات بنجاح' });
+        toast({ title: t('measurementsSaved') });
         setOpen(false);
       },
       onError: (err: any) => {
-        toast({ title: 'خطأ في الحفظ', description: err?.message || 'حدث خطأ غير متوقع', variant: 'destructive' });
+        toast({ title: t('savingError'), description: err?.message || t('unexpectedError'), variant: 'destructive' });
       }
     }
   });
@@ -480,21 +490,21 @@ function MeasurementsDialog({ profile, customerId }: { profile: any; customerId:
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button variant="outline" className="w-full rounded-xl gap-2 hover:bg-primary hover:text-white transition-colors">
-          <Ruler className="w-4 h-4" /> تحديث القياسات
+          <Ruler className="w-4 h-4" /> {t('updateMeasurements')}
         </Button>
       </DialogTrigger>
-      <DialogContent dir="rtl" className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
+      <DialogContent dir={dir} className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="font-display text-2xl text-primary border-b pb-4">قياسات: {profile.name}</DialogTitle>
+          <DialogTitle className="font-display text-2xl text-primary border-b pb-4">{t('measurementsFor')} {profile.name}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-6 mt-4">
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             {[
-              { label: 'الطول',  name: 'length' },
-              { label: 'الكتف',  name: 'shoulder' },
-              { label: 'الصدر',  name: 'chest' },
-              { label: 'الكم',   name: 'sleeve' },
-              { label: 'الياقة', name: 'neck' },
+              { label: t('mLength'), name: 'length' },
+              { label: t('mShoulder'), name: 'shoulder' },
+              { label: t('mChest'), name: 'chest' },
+              { label: t('mSleeve'), name: 'sleeve' },
+              { label: t('mNeck'), name: 'neck' },
             ].map(({ label, name }) => (
               <div key={name} className="space-y-2">
                 <label className="text-sm font-bold text-primary">{label}</label>
@@ -504,8 +514,8 @@ function MeasurementsDialog({ profile, customerId }: { profile: any; customerId:
                   name={name}
                   defaultValue={(m as any)[name] || ''}
                   onInput={(e) => {
-                    const t = e.target as HTMLInputElement;
-                    t.value = toEnglishDigits(t.value);
+                    const inp = e.target as HTMLInputElement;
+                    inp.value = toEnglishDigits(inp.value);
                   }}
                   className="h-12 text-lg text-center font-bold bg-muted/50 rounded-xl"
                 />
@@ -515,17 +525,17 @@ function MeasurementsDialog({ profile, customerId }: { profile: any; customerId:
 
           <div className="space-y-4 pt-4 border-t border-border">
             <div className="space-y-2">
-              <label className="text-sm font-bold">ملاحظات الموديل (القصة، الأزرار، إلخ)</label>
-              <Textarea name="modelNotes" defaultValue={m.modelNotes || ''} className="min-h-24 bg-muted/50 rounded-xl resize-none" placeholder="تفاصيل الخياطة والموديل..." />
+              <label className="text-sm font-bold">{t('modelNotesHint')}</label>
+              <Textarea name="modelNotes" defaultValue={m.modelNotes || ''} className="min-h-24 bg-muted/50 rounded-xl resize-none" placeholder={t('tailoringDetails')} />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-bold">ملاحظات عامة</label>
+              <label className="text-sm font-bold">{t('generalNotes')}</label>
               <Textarea name="generalNotes" defaultValue={m.generalNotes || ''} className="bg-muted/50 rounded-xl resize-none" />
             </div>
           </div>
 
           <Button type="submit" className="w-full h-14 rounded-xl text-lg font-bold bg-primary hover:bg-primary/90" disabled={mutation.isPending}>
-            {mutation.isPending ? <Loader2 className="w-6 h-6 animate-spin" /> : <><Save className="w-5 h-5 ml-2" /> حفظ القياسات</>}
+            {mutation.isPending ? <Loader2 className="w-6 h-6 animate-spin" /> : <><Save className="w-5 h-5 ml-2" /> {t('saveMeasurements')}</>}
           </Button>
         </form>
       </DialogContent>
