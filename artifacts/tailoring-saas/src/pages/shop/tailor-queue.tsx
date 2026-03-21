@@ -291,7 +291,7 @@ function SubOrderRow({ so, onMarkReady, isPending, t }: {
 
               {showMeasurements && (
                 <div className="mt-3 space-y-3">
-                  <div className="grid grid-cols-5 gap-2 text-center text-sm">
+                  <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 text-center">
                     {[
                       { label: t('mLength'), value: m.length },
                       { label: t('mShoulder'), value: m.shoulder },
@@ -299,9 +299,9 @@ function SubOrderRow({ so, onMarkReady, isPending, t }: {
                       { label: t('mSleeve'), value: m.sleeve },
                       { label: t('mNeck'), value: m.neck },
                     ].map(({ label, value }) => (
-                      <div key={label} className="bg-muted p-2 rounded-lg">
-                        <div className="text-muted-foreground text-xs mb-1">{label}</div>
-                        <div className="font-bold text-primary">{value ?? '-'}</div>
+                      <div key={label} className="bg-muted p-3 rounded-xl flex flex-col items-center gap-1">
+                        <div className="text-muted-foreground text-xs font-medium">{label}</div>
+                        <div className="font-bold text-primary text-lg leading-none">{value ?? '-'}</div>
                       </div>
                     ))}
                   </div>
