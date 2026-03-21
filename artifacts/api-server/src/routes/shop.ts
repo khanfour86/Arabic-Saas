@@ -59,6 +59,8 @@ router.get("/shop/tailor-queue", requireAuth, requireShopRole("shop_manager", "t
         shopId: so.shopId,
         profileId: so.profileId,
         profileName: profile?.name ?? "غير معروف",
+        isProof: profile?.isProof ?? false,
+        isMain: profile?.isMain ?? false,
         subOrderNumber: so.subOrderNumber,
         quantity: so.quantity,
         fabricSource: so.fabricSource,
