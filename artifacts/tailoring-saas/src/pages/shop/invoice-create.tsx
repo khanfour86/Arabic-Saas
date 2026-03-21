@@ -119,7 +119,7 @@ export function InvoiceCreate() {
                         .map((p: any) => (
                           <SelectItem key={p.id} value={p.id.toString()}>
                             <span className="flex items-center gap-2">
-                              {customer.name}
+                              {p.name}
                               {p.isMain && <span className="text-xs bg-accent/30 text-accent-foreground px-1.5 py-0.5 rounded-full">{t('badgeMain')}</span>}
                               {p.isProof && <span className="text-xs bg-orange-500/20 text-orange-700 px-1.5 py-0.5 rounded-full">{t('badgeProof')}</span>}
                             </span>
