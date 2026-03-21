@@ -40,22 +40,27 @@ async function migrateProofProfiles(): Promise<void> {
       );
 
     if (customersWithoutProof.length === 0) {
-      console.log("[migrate] All customers already have a بروفا profile — skipping");
-      return;
+      console.log("[migrate] All customers already have a تجربه profile — skipping");
+    } else {
+      const proofProfiles = customersWithoutProof.map(c => ({
+        customerId: c.id,
+        shopId: c.shopId,
+        name: 'تجربه',
+        isMain: false,
+        isProof: true,
+      }));
+
+      await db.insert(profilesTable).values(proofProfiles);
+      console.log(`[migrate] ✓ Created تجربه profiles for ${proofProfiles.length} customers`);
     }
 
-    const proofProfiles = customersWithoutProof.map(c => ({
-      customerId: c.id,
-      shopId: c.shopId,
-      name: 'بروفا',
-      isMain: false,
-      isProof: true,
-    }));
-
-    await db.insert(profilesTable).values(proofProfiles);
-    console.log(`[migrate] ✓ Created بروفا profiles for ${proofProfiles.length} customers`);
+    // Rename any old 'بروفا' proof profiles to 'تجربه'
+    await db.update(profilesTable)
+      .set({ name: 'تجربه' })
+      .where(and(eq(profilesTable.isProof, true), eq(profilesTable.name, 'بروفا')));
+    console.log("[migrate] ✓ Renamed old 'بروفا' profiles to 'تجربه'");
   } catch (err) {
-    console.error("[migrate] Error creating بروفا profiles:", err);
+    console.error("[migrate] Error in proof profile migration:", err);
   }
 }
 

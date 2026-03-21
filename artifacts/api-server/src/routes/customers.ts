@@ -96,7 +96,7 @@ router.post("/shop/customers", isShopUser, async (req, res): Promise<void> => {
     {
       customerId: customer.id,
       shopId: user.shopId!,
-      name: 'بروفا',
+      name: 'تجربه',
       isMain: false,
       isProof: true,
     },
