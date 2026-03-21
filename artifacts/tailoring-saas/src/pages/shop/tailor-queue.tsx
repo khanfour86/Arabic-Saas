@@ -4,7 +4,8 @@ import { useTranslation } from '@/lib/i18n';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, CheckCircle, Scissors, Ruler, StickyNote, Pin, PinOff } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Loader2, CheckCircle, Scissors, Ruler, StickyNote, Pin, PinOff, Search, X } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
@@ -30,6 +31,7 @@ export function TailorQueue() {
   const { toast } = useToast();
   const { t } = useTranslation();
   const [pinnedIds, setPinnedIds] = useState<Set<number>>(getPinnedIds);
+  const [search, setSearch] = useState('');
 
   const markReadyMutation = useMarkSubOrderReady({
     mutation: {
@@ -61,10 +63,18 @@ export function TailorQueue() {
 
   const allItems: any[] = data?.items ?? [];
 
-  const pendingItems = allItems.filter((item: any) =>
+  const q = search.trim().toLowerCase();
+  const filtered = q
+    ? allItems.filter((item: any) =>
+        item.invoiceNumber.toLowerCase().includes(q) ||
+        item.customerPhone.replace(/\s/g, '').includes(q.replace(/\s/g, ''))
+      )
+    : allItems;
+
+  const pendingItems = filtered.filter((item: any) =>
     item.subOrders.some((s: any) => s.status !== 'ready')
   );
-  const readyItems = allItems.filter((item: any) =>
+  const readyItems = filtered.filter((item: any) =>
     item.subOrders.every((s: any) => s.status === 'ready')
   );
 
@@ -83,7 +93,35 @@ export function TailorQueue() {
         <p className="text-muted-foreground mt-1">{t('tailorQueueSubtitle')}</p>
       </div>
 
-      {pendingItems.length === 0 && (
+      <div className="relative">
+        <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+        <Input
+          className="ps-10 pe-10 rounded-xl h-11 bg-card"
+          placeholder="ابحث برقم الفاتورة أو رقم الهاتف..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+        />
+        {search && (
+          <button
+            onClick={() => setSearch('')}
+            className="absolute end-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+
+      {q && pendingItems.length === 0 && readyItems.length === 0 && (
+        <Card className="border-0 shadow-sm rounded-2xl">
+          <CardContent className="p-10 flex flex-col items-center text-center text-muted-foreground gap-2">
+            <Search className="w-10 h-10 opacity-30" />
+            <p className="font-bold">لا توجد نتائج للبحث</p>
+            <p className="text-sm">"{search}"</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {!q && pendingItems.length === 0 && (
         <Card className="border-0 shadow-md rounded-2xl">
           <CardContent className="p-12 flex flex-col items-center text-center text-muted-foreground gap-3">
             <CheckCircle className="w-16 h-16 text-emerald-400 animate-bounce" />
