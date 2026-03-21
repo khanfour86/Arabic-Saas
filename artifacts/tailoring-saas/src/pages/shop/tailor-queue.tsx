@@ -9,6 +9,7 @@ import { Loader2, CheckCircle, Scissors, Ruler, StickyNote, Pin, PinOff, Search,
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
+import { toEnglishDigits } from '@/lib/digits';
 
 const PINNED_KEY = 'tailor_pinned_invoices';
 
@@ -99,7 +100,7 @@ export function TailorQueue() {
           className="ps-10 pe-10 rounded-xl h-11 bg-card"
           placeholder="ابحث برقم الفاتورة أو رقم الهاتف..."
           value={search}
-          onChange={e => setSearch(e.target.value)}
+          onChange={e => setSearch(toEnglishDigits(e.target.value))}
         />
         {search && (
           <button
