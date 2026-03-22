@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { User, Phone, Plus, Loader2, FilePlus, Save, Ruler, StickyNote, Scissors, Pencil, X, Check } from 'lucide-react';
 import { Link, useParams } from 'wouter';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/lib/auth';
 
@@ -209,8 +209,15 @@ export function CustomerDetail() {
   const { toast } = useToast();
   const { t } = useTranslation();
 
-  const canEdit = user?.role === 'shop_manager' || user?.role === 'reception';
-  const canEditPhone = user?.role === 'shop_manager';
+  const { data: shopStatusData } = useQuery({
+    queryKey: ['/api/shop/status'],
+    queryFn: () => fetch('/api/shop/status').then(r => r.ok ? r.json() : null),
+    staleTime: 60000, retry: false,
+  });
+  const isRestricted = shopStatusData?.subscriptionStatus === 'expired' || shopStatusData?.subscriptionStatus === 'suspended';
+
+  const canEdit = (user?.role === 'shop_manager' || user?.role === 'reception') && !isRestricted;
+  const canEditPhone = user?.role === 'shop_manager' && !isRestricted;
 
   const updateCustomerMutation = useUpdateCustomer({
     mutation: {
@@ -279,11 +286,17 @@ export function CustomerDetail() {
               </div>
             </div>
           </div>
-          <Link href={`/shop/invoices/new?customerId=${customer.id}`}>
-            <Button className="bg-accent text-accent-foreground hover:bg-accent/90 shadow-lg shadow-accent/20 rounded-xl h-14 px-8 text-lg font-bold gap-2 hover:-translate-y-1 transition-all w-full md:w-auto">
+          {isRestricted ? (
+            <Button disabled className="bg-accent/50 text-accent-foreground rounded-xl h-14 px-8 text-lg font-bold gap-2 w-full md:w-auto opacity-50 cursor-not-allowed">
               <FilePlus className="w-6 h-6" /> {t('newInvoice')}
             </Button>
-          </Link>
+          ) : (
+            <Link href={`/shop/invoices/new?customerId=${customer.id}`}>
+              <Button className="bg-accent text-accent-foreground hover:bg-accent/90 shadow-lg shadow-accent/20 rounded-xl h-14 px-8 text-lg font-bold gap-2 hover:-translate-y-1 transition-all w-full md:w-auto">
+                <FilePlus className="w-6 h-6" /> {t('newInvoice')}
+              </Button>
+            </Link>
+          )}
         </CardContent>
       </Card>
 

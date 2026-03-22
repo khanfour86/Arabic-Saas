@@ -2,13 +2,24 @@ import React from 'react';
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@/lib/auth';
 import { useTranslation } from '@/lib/i18n';
-import { Home, Users, FileText, Settings, Scissors, LogOut } from 'lucide-react';
+import { Home, Users, FileText, Settings, Scissors, LogOut, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useQuery } from '@tanstack/react-query';
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
   const [location] = useLocation();
   const { t, lang, setLang, dir } = useTranslation();
+
+  const { data: shopStatusData } = useQuery({
+    queryKey: ['/api/shop/status'],
+    queryFn: () => fetch('/api/shop/status').then(r => r.ok ? r.json() : null),
+    enabled: !!user?.shopId,
+    staleTime: 60000,
+    retry: false,
+  });
+  const isRestricted = shopStatusData?.subscriptionStatus === 'expired' || shopStatusData?.subscriptionStatus === 'suspended';
+  const statusLabel = shopStatusData?.subscriptionStatus === 'expired' ? 'منتهي' : shopStatusData?.subscriptionStatus === 'suspended' ? 'موقوف' : '';
 
   const getNavItems = () => {
     if (!user) return [];
@@ -127,6 +138,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
         <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-24 md:pb-8">
           <div className="max-w-6xl mx-auto w-full">
+            {isRestricted && (
+              <div className="mb-4 p-3 bg-destructive/10 border border-destructive/30 rounded-xl flex items-center gap-2 text-destructive text-sm font-medium">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                <span>{t('shopRestricted')}</span>
+                <span className="font-bold">({statusLabel})</span>
+              </div>
+            )}
             {children}
           </div>
         </div>

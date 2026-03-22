@@ -1,5 +1,5 @@
 import { Router, type IRouter, type RequestHandler } from "express";
-import { db, customersTable, profilesTable, measurementsTable } from "@workspace/db";
+import { db, customersTable, profilesTable, measurementsTable, shopsTable } from "@workspace/db";
 import { eq, and, ilike, desc } from "drizzle-orm";
 import { CreateCustomerBody, UpdateCustomerBody, CreateProfileBody } from "@workspace/api-zod";
 import { requireAuth, requireShopRole, type AuthUser } from "../lib/auth";
@@ -10,6 +10,24 @@ const isShopUser: RequestHandler = (req, res, next) => {
   requireAuth(req, res, () => {
     requireShopRole("shop_manager", "reception", "tailor")(req, res, next);
   });
+};
+
+const requireActiveShop: RequestHandler = async (req, res, next) => {
+  const user = (req as any).user as AuthUser;
+  if (!user?.shopId) { next(); return; }
+  try {
+    const [shop] = await db.select({ subscriptionStatus: shopsTable.subscriptionStatus })
+      .from(shopsTable).where(eq(shopsTable.id, user.shopId));
+    if (shop?.subscriptionStatus === 'expired' || shop?.subscriptionStatus === 'suspended') {
+      const label = shop.subscriptionStatus === 'expired' ? 'منتهي' : 'موقوف';
+      res.status(403).json({
+        error: `المحل حالته ${label}، يمكنك فقط الاطلاع على البيانات السابقة وتصدير النسخة الاحتياطية.`,
+        subscriptionStatus: shop.subscriptionStatus,
+      });
+      return;
+    }
+    next();
+  } catch { next(); }
 };
 
 async function getProfilesWithMeasurements(shopId: number, customerId: number) {
@@ -62,7 +80,7 @@ router.get("/shop/customers", isShopUser, async (req, res): Promise<void> => {
   res.json({ customers });
 });
 
-router.post("/shop/customers", isShopUser, async (req, res): Promise<void> => {
+router.post("/shop/customers", isShopUser, requireActiveShop, async (req, res): Promise<void> => {
   const user = (req as any).user as AuthUser;
   const parsed = CreateCustomerBody.safeParse(req.body);
   if (!parsed.success) {
@@ -137,7 +155,7 @@ router.get("/shop/customers/:customerId", isShopUser, async (req, res): Promise<
   res.json({ ...customer, profiles });
 });
 
-router.patch("/shop/customers/:customerId", isShopUser, async (req, res): Promise<void> => {
+router.patch("/shop/customers/:customerId", isShopUser, requireActiveShop, async (req, res): Promise<void> => {
   const user = (req as any).user as AuthUser;
   const id = parseInt(Array.isArray(req.params.customerId) ? req.params.customerId[0] : req.params.customerId, 10);
   const parsed = UpdateCustomerBody.safeParse(req.body);
@@ -192,7 +210,7 @@ router.patch("/shop/customers/:customerId", isShopUser, async (req, res): Promis
   res.json(customer);
 });
 
-router.post("/shop/profiles", isShopUser, async (req, res): Promise<void> => {
+router.post("/shop/profiles", isShopUser, requireActiveShop, async (req, res): Promise<void> => {
   const user = (req as any).user as AuthUser;
   const parsed = CreateProfileBody.safeParse(req.body);
   if (!parsed.success) {
@@ -250,7 +268,7 @@ router.get("/shop/profiles/:profileId", isShopUser, async (req, res): Promise<vo
   res.json({ ...profile, measurements: m });
 });
 
-router.patch("/shop/profiles/:profileId", isShopUser, async (req, res): Promise<void> => {
+router.patch("/shop/profiles/:profileId", isShopUser, requireActiveShop, async (req, res): Promise<void> => {
   const user = (req as any).user as AuthUser;
   const id = parseInt(Array.isArray(req.params.profileId) ? req.params.profileId[0] : req.params.profileId, 10);
 
@@ -277,7 +295,7 @@ router.patch("/shop/profiles/:profileId", isShopUser, async (req, res): Promise<
   res.json(profile);
 });
 
-router.put("/shop/measurements/:profileId", isShopUser, async (req, res): Promise<void> => {
+router.put("/shop/measurements/:profileId", isShopUser, requireActiveShop, async (req, res): Promise<void> => {
   const user = (req as any).user as AuthUser;
   const profileId = parseInt(Array.isArray(req.params.profileId) ? req.params.profileId[0] : req.params.profileId, 10);
 

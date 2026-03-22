@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, subOrdersTable, invoicesTable, profilesTable, measurementsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { type AuthUser } from "../lib/auth";
-import { isShopUser, isTailor, isManagerOrReception } from "../lib/shopMiddleware";
+import { isShopUser, isTailor, isManagerOrReception, requireActiveShop } from "../lib/shopMiddleware";
 
 const router: IRouter = Router();
 
@@ -57,7 +57,7 @@ async function buildSubOrderResponse(so: any) {
   };
 }
 
-router.post("/shop/suborders", isManagerOrReception, async (req, res): Promise<void> => {
+router.post("/shop/suborders", isManagerOrReception, requireActiveShop, async (req, res): Promise<void> => {
   const user = (req as any).user as AuthUser;
   const { invoiceId, profileId, quantity, fabricSource, fabricDescription, price, paidAmount, notes } = req.body;
 
@@ -92,7 +92,7 @@ router.post("/shop/suborders", isManagerOrReception, async (req, res): Promise<v
   res.status(201).json(result);
 });
 
-router.patch("/shop/suborders/:subOrderId", isShopUser, async (req, res): Promise<void> => {
+router.patch("/shop/suborders/:subOrderId", isShopUser, requireActiveShop, async (req, res): Promise<void> => {
   const user = (req as any).user as AuthUser;
   const id = parseInt(Array.isArray(req.params.subOrderId) ? req.params.subOrderId[0] : req.params.subOrderId, 10);
 

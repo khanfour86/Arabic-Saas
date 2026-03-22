@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, invoicesTable, subOrdersTable, customersTable, profilesTable, measurementsTable, shopsTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { type AuthUser } from "../lib/auth";
-import { isShopUser, isManagerOrReception } from "../lib/shopMiddleware";
+import { isShopUser, isManagerOrReception, requireActiveShop } from "../lib/shopMiddleware";
 
 const router: IRouter = Router();
 
@@ -139,7 +139,7 @@ router.get("/shop/invoices", isShopUser, async (req, res): Promise<void> => {
   res.json({ invoices });
 });
 
-router.post("/shop/invoices", isManagerOrReception, async (req, res): Promise<void> => {
+router.post("/shop/invoices", isManagerOrReception, requireActiveShop, async (req, res): Promise<void> => {
   const user = (req as any).user as AuthUser;
   const { customerId, notes, subOrders } = req.body;
 
@@ -217,7 +217,7 @@ router.get("/shop/invoices/:invoiceId", isShopUser, async (req, res): Promise<vo
   res.json(result);
 });
 
-router.patch("/shop/invoices/:invoiceId", isManagerOrReception, async (req, res): Promise<void> => {
+router.patch("/shop/invoices/:invoiceId", isManagerOrReception, requireActiveShop, async (req, res): Promise<void> => {
   const user = (req as any).user as AuthUser;
   const id = parseInt(Array.isArray(req.params.invoiceId) ? req.params.invoiceId[0] : req.params.invoiceId, 10);
 
@@ -235,7 +235,7 @@ router.patch("/shop/invoices/:invoiceId", isManagerOrReception, async (req, res)
   res.json(result);
 });
 
-router.post("/shop/invoices/:invoiceId/deliver", isManagerOrReception, async (req, res): Promise<void> => {
+router.post("/shop/invoices/:invoiceId/deliver", isManagerOrReception, requireActiveShop, async (req, res): Promise<void> => {
   const user = (req as any).user as AuthUser;
   const id = parseInt(Array.isArray(req.params.invoiceId) ? req.params.invoiceId[0] : req.params.invoiceId, 10);
 

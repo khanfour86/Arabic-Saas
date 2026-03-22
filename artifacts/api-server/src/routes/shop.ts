@@ -1,8 +1,9 @@
 import { Router, type IRouter } from "express";
-import { db, invoicesTable, subOrdersTable, customersTable, profilesTable, measurementsTable, usersTable } from "@workspace/db";
+import { db, invoicesTable, subOrdersTable, customersTable, profilesTable, measurementsTable, usersTable, shopsTable } from "@workspace/db";
 import { eq, and, gte, desc } from "drizzle-orm";
 import { requireAuth, requireShopRole, type AuthUser } from "../lib/auth";
 import { hashPassword } from "../lib/auth";
+import { isShopUser, requireActiveShop } from "../lib/shopMiddleware";
 
 const router: IRouter = Router();
 
@@ -18,7 +19,14 @@ router.get("/shop/dashboard", requireAuth, requireShopRole("shop_manager", "rece
   const deliveredToday = allInvoices.filter(i => i.status === "delivered" && i.deliveredAt && new Date(i.deliveredAt) >= today).length;
   const totalDelivered = allInvoices.filter(i => i.status === "delivered").length;
 
-  res.json({ underTailoring, readyForDelivery, deliveredToday, totalDelivered });
+  const [shop] = await db.select({ subscriptionStatus: shopsTable.subscriptionStatus }).from(shopsTable).where(eq(shopsTable.id, user.shopId!));
+  res.json({ underTailoring, readyForDelivery, deliveredToday, totalDelivered, subscriptionStatus: shop?.subscriptionStatus ?? 'active' });
+});
+
+router.get("/shop/status", isShopUser, async (req, res): Promise<void> => {
+  const user = (req as any).user as AuthUser;
+  const [shop] = await db.select({ subscriptionStatus: shopsTable.subscriptionStatus }).from(shopsTable).where(eq(shopsTable.id, user.shopId!));
+  res.json({ subscriptionStatus: shop?.subscriptionStatus ?? 'active' });
 });
 
 router.get("/shop/tailor-queue", requireAuth, requireShopRole("shop_manager", "tailor"), async (req, res): Promise<void> => {
@@ -103,7 +111,7 @@ router.get("/shop/users", requireAuth, requireShopRole("shop_manager"), async (r
 
 const ALLOWED_SHOP_ROLES = ['reception', 'tailor'] as const;
 
-router.post("/shop/users", requireAuth, requireShopRole("shop_manager"), async (req, res): Promise<void> => {
+router.post("/shop/users", requireAuth, requireShopRole("shop_manager"), requireActiveShop, async (req, res): Promise<void> => {
   const user = (req as any).user as AuthUser;
   const { username, name, password, role } = req.body;
 

@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { User, Phone, Search, Plus, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 
 function buildParams(search: string) {
@@ -23,6 +23,12 @@ export function CustomersList() {
   const [inputFocused, setInputFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const { data: shopStatusData } = useQuery({
+    queryKey: ['/api/shop/status'],
+    queryFn: () => fetch('/api/shop/status').then(r => r.ok ? r.json() : null),
+    staleTime: 60000, retry: false,
+  });
+  const isRestricted = shopStatusData?.subscriptionStatus === 'expired' || shopStatusData?.subscriptionStatus === 'suspended';
   const [, setLocation] = useLocation();
   const { t, dir } = useTranslation();
 
@@ -62,7 +68,13 @@ export function CustomersList() {
           <h1 className="text-3xl font-display font-bold text-primary">{t('customersTitle')}</h1>
           <p className="text-muted-foreground mt-1">{t('customersSubtitle')}</p>
         </div>
-        <CustomerCreateDialog />
+        <CustomerCreateDialog
+          trigger={
+            <Button disabled={isRestricted} className="bg-primary text-white hover:bg-primary/90 shadow-lg rounded-xl gap-2 h-12 px-6 disabled:opacity-50">
+              <Plus className="w-5 h-5" /> {t('addCustomer')}
+            </Button>
+          }
+        />
       </div>
 
       <div className="relative">
@@ -140,7 +152,7 @@ export function CustomersList() {
               <p className="text-lg">
                 {debouncedSearch ? t('noMatchCustomers') : t('noCustomers')}
               </p>
-              {debouncedSearch && /^\d+$/.test(debouncedSearch) && (
+              {debouncedSearch && /^\d+$/.test(debouncedSearch) && !isRestricted && (
                 <CustomerCreateDialog
                   trigger={<Button variant="link" className="mt-2 text-accent">{t('addAsNew')}</Button>}
                   initialPhone={debouncedSearch}
