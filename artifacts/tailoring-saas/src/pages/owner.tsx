@@ -445,7 +445,11 @@ function ShopCreateForm({ onSuccess }: { onSuccess: () => void }) {
               onChange={e => setManagerPassword(e.target.value)}
               className="bg-white rounded-xl"
               dir="ltr"
+              type="password"
             />
+            <p className={`text-xs ${managerPassword.length > 0 && managerPassword.length < 6 ? 'text-destructive' : 'text-muted-foreground'}`}>
+              لازم 6 أحرف على الأقل
+            </p>
           </div>
         </div>
       </div>

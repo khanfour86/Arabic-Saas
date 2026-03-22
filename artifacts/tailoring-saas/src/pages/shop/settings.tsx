@@ -178,6 +178,7 @@ function UserEditDialog({ user }: { user: any }) {
 
 function UserCreateDialog() {
   const [open, setOpen] = useState(false);
+  const [password, setPassword] = useState('');
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { t, dir } = useTranslation();
@@ -194,11 +195,6 @@ function UserCreateDialog() {
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
-    const password = fd.get('password') as string;
-    if (password.length < 6) {
-      toast({ title: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل', variant: 'destructive' });
-      return;
-    }
     mutation.mutate({
       data: {
         name: fd.get('name') as string,
@@ -210,7 +206,7 @@ function UserCreateDialog() {
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setPassword(''); }}>
       <DialogTrigger asChild>
         <Button className="rounded-xl gap-2 bg-primary text-white"><Plus className="w-4 h-4"/> {t('addUser')}</Button>
       </DialogTrigger>
@@ -229,7 +225,18 @@ function UserCreateDialog() {
           </div>
           <div className="space-y-2">
             <label className="text-sm font-bold">{t('passwordLabel')}</label>
-            <Input name="password" type="password" required className="bg-muted/50 rounded-xl" dir="ltr" />
+            <Input
+              name="password"
+              type="password"
+              required
+              className="bg-muted/50 rounded-xl"
+              dir="ltr"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+            />
+            <p className={`text-xs ${password.length > 0 && password.length < 6 ? 'text-destructive' : 'text-muted-foreground'}`}>
+              لازم 6 أحرف على الأقل
+            </p>
           </div>
           <div className="space-y-2">
             <label className="text-sm font-bold">{t('roleLabel')}</label>
@@ -241,7 +248,7 @@ function UserCreateDialog() {
               </SelectContent>
             </Select>
           </div>
-          <Button type="submit" className="w-full h-12 rounded-xl mt-4" disabled={mutation.isPending}>
+          <Button type="submit" className="w-full h-12 rounded-xl mt-4" disabled={mutation.isPending || password.length < 6}>
             {mutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : t('saveBtn')}
           </Button>
         </form>
