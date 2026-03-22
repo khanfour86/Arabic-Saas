@@ -448,7 +448,7 @@ function ShopCreateForm({ onSuccess }: { onSuccess: () => void }) {
               type="password"
             />
             <p className={`text-xs ${managerPassword.length > 0 && managerPassword.length < 6 ? 'text-destructive' : 'text-muted-foreground'}`}>
-              لازم 6 أحرف على الأقل
+              {t('minPassword')}
             </p>
           </div>
         </div>

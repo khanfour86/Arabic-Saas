@@ -235,7 +235,7 @@ function UserCreateDialog() {
               onChange={e => setPassword(e.target.value)}
             />
             <p className={`text-xs ${password.length > 0 && password.length < 6 ? 'text-destructive' : 'text-muted-foreground'}`}>
-              لازم 6 أحرف على الأقل
+              {t('minPassword')}
             </p>
           </div>
           <div className="space-y-2">
