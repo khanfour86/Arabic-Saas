@@ -589,6 +589,7 @@ function ShopEditDialog({ shop }: { shop: any }) {
         queryClient.invalidateQueries({ queryKey: ['/api/owner/shops'] });
         queryClient.invalidateQueries({ queryKey: ['/api/owner/stats'] });
         toast({ title: t('updatedSuccess') });
+        setOpen(false);
       },
       onError: (err) => toast({ title: t('error'), description: err.message, variant: 'destructive' }),
     }
