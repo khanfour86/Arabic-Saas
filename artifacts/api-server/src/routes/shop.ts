@@ -101,12 +101,19 @@ router.get("/shop/users", requireAuth, requireShopRole("shop_manager"), async (r
   res.json({ users: safeUsers });
 });
 
+const ALLOWED_SHOP_ROLES = ['reception', 'tailor'] as const;
+
 router.post("/shop/users", requireAuth, requireShopRole("shop_manager"), async (req, res): Promise<void> => {
   const user = (req as any).user as AuthUser;
   const { username, name, password, role } = req.body;
 
   if (!username || !name || !password || !role) {
     res.status(400).json({ error: "جميع الحقول مطلوبة" });
+    return;
+  }
+
+  if (!ALLOWED_SHOP_ROLES.includes(role)) {
+    res.status(403).json({ error: `الدور '${role}' غير مسموح به. الأدوار المسموحة: ${ALLOWED_SHOP_ROLES.join(', ')}` });
     return;
   }
 
@@ -131,6 +138,11 @@ router.post("/shop/users", requireAuth, requireShopRole("shop_manager"), async (
 router.patch("/shop/users/:userId", requireAuth, requireShopRole("shop_manager"), async (req, res): Promise<void> => {
   const user = (req as any).user as AuthUser;
   const id = parseInt(Array.isArray(req.params.userId) ? req.params.userId[0] : req.params.userId, 10);
+
+  if (req.body.role && !ALLOWED_SHOP_ROLES.includes(req.body.role)) {
+    res.status(403).json({ error: `الدور '${req.body.role}' غير مسموح به. الأدوار المسموحة: ${ALLOWED_SHOP_ROLES.join(', ')}` });
+    return;
+  }
 
   const updateData: Record<string, any> = {};
   if (req.body.name) updateData.name = req.body.name;
