@@ -17,13 +17,6 @@ export function Login() {
   const { toast } = useToast();
   const { t, lang, setLang, dir } = useTranslation();
 
-  const DEMO_USERS = [
-    { label: t('demoOwner'), username: 'owner', password: 'owner123' },
-    { label: t('demoManager'), username: 'manager1', password: 'manager123' },
-    { label: t('demoReception'), username: 'reception1', password: 'reception123' },
-    { label: t('demoTailor'), username: 'tailor1', password: 'tailor123' },
-  ];
-
   const loginMutation = useLogin({
     mutation: {
       onSuccess: (data) => {
@@ -109,22 +102,6 @@ export function Login() {
               </Button>
             </form>
 
-            <div className="mt-10 p-6 bg-primary/5 rounded-2xl border border-primary/10">
-              <h3 className="text-sm font-bold text-primary mb-3 text-center">{t('loginDemo')}</h3>
-              <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                {DEMO_USERS.map(u => (
-                  <button
-                    key={u.username}
-                    type="button"
-                    onClick={() => { setUsername(u.username); setPassword(u.password); }}
-                    className="bg-white/60 hover:bg-white/90 active:bg-white p-2 rounded-lg text-center cursor-pointer transition-colors border border-transparent hover:border-primary/20"
-                  >
-                    <span className="block font-bold text-foreground">{u.label}</span>
-                    <span className="text-muted-foreground">{u.username}/{u.password}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
           </CardContent>
         </Card>
       </div>
