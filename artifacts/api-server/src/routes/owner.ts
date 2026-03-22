@@ -58,6 +58,11 @@ router.post("/owner/shops", requireAuth, requireOwner, async (req, res): Promise
 
   const { managerUsername, managerPassword, ...shopData } = parsed.data;
 
+  if (managerPassword.length < 6) {
+    res.status(400).json({ error: "كلمة مرور المدير يجب أن تكون 6 أحرف على الأقل" });
+    return;
+  }
+
   const [shop] = await db.insert(shopsTable).values({
     name: shopData.name,
     managerName: shopData.managerName,
@@ -137,6 +142,12 @@ router.patch("/owner/shops/:shopId/users/:userId", requireAuth, requireOwner, as
   const userId = parseInt(Array.isArray(req.params.userId) ? req.params.userId[0] : req.params.userId, 10);
 
   const { username, password, name } = req.body;
+
+  if (password && password.length < 6) {
+    res.status(400).json({ error: "كلمة المرور يجب أن تكون 6 أحرف على الأقل" });
+    return;
+  }
+
   const updateData: Record<string, any> = {};
   if (username) updateData.username = username;
   if (name) updateData.name = name;

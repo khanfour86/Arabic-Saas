@@ -299,7 +299,7 @@ function ShopCreateForm({ onSuccess }: { onSuccess: () => void }) {
     area.trim().length > 0 &&
     subscriptionStart.length > 0 &&
     managerUsername.trim().length > 0 &&
-    managerPassword.trim().length > 0;
+    managerPassword.trim().length >= 6;
 
   const mutation = useCreateShop({
     mutation: {
@@ -483,6 +483,7 @@ function UserEditRow({ shopId, user, onSaved }: { shopId: number; user: any; onS
 
   const mutation = useMutation({
     mutationFn: async () => {
+      if (password && password.length < 6) throw new Error('كلمة المرور يجب أن تكون 6 أحرف على الأقل');
       const body: any = {};
       if (username !== user.username) body.username = username;
       if (name !== user.name) body.name = name;

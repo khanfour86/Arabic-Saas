@@ -121,6 +121,10 @@ function UserEditDialog({ user }: { user: any }) {
     const data: any = { role };
     const name = fd.get('name') as string;
     const password = fd.get('password') as string;
+    if (password && password.length < 6) {
+      toast({ title: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل', variant: 'destructive' });
+      return;
+    }
     if (name) data.name = name;
     if (password) data.password = password;
     mutation.mutate({ userId: user.id, data });
@@ -190,11 +194,16 @@ function UserCreateDialog() {
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
+    const password = fd.get('password') as string;
+    if (password.length < 6) {
+      toast({ title: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل', variant: 'destructive' });
+      return;
+    }
     mutation.mutate({
       data: {
         name: fd.get('name') as string,
         username: fd.get('username') as string,
-        password: fd.get('password') as string,
+        password,
         role: fd.get('role') as any,
       }
     });

@@ -112,6 +112,11 @@ router.post("/shop/users", requireAuth, requireShopRole("shop_manager"), async (
     return;
   }
 
+  if (password.length < 6) {
+    res.status(400).json({ error: "كلمة المرور يجب أن تكون 6 أحرف على الأقل" });
+    return;
+  }
+
   if (!ALLOWED_SHOP_ROLES.includes(role)) {
     res.status(403).json({ error: `الدور '${role}' غير مسموح به. الأدوار المسموحة: ${ALLOWED_SHOP_ROLES.join(', ')}` });
     return;
@@ -141,6 +146,11 @@ router.patch("/shop/users/:userId", requireAuth, requireShopRole("shop_manager")
 
   if (req.body.role && !ALLOWED_SHOP_ROLES.includes(req.body.role)) {
     res.status(403).json({ error: `الدور '${req.body.role}' غير مسموح به. الأدوار المسموحة: ${ALLOWED_SHOP_ROLES.join(', ')}` });
+    return;
+  }
+
+  if (req.body.password && req.body.password.length < 6) {
+    res.status(400).json({ error: "كلمة المرور يجب أن تكون 6 أحرف على الأقل" });
     return;
   }
 
