@@ -555,11 +555,7 @@ function UserEditRow({ shopId, user, onSaved }: { shopId: number; user: any; onS
         </div>
       </div>
       <div className="flex gap-2 pt-1">
-        <Button size="sm" onClick={() => {
-          const hasChanges = username !== user.username || name !== user.name || !!password;
-          if (!hasChanges) { setEditing(false); return; }
-          mutation.mutate();
-        }} disabled={mutation.isPending} className="flex-1">
+        <Button size="sm" onClick={() => mutation.mutate()} disabled={mutation.isPending} className="flex-1">
           {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : t('saveBtn')}
         </Button>
         <Button size="sm" variant="outline" onClick={() => { setEditing(false); setUsername(user.username); setName(user.name); setPassword(''); }}>
