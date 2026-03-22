@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { User, Phone, Plus, Loader2, FilePlus, Save, Ruler, StickyNote, Scissors, Pencil, X, Check } from 'lucide-react';
 import { Link, useParams } from 'wouter';
+import { format } from 'date-fns';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/lib/auth';
@@ -361,6 +362,12 @@ function ProfileCard({ profile, customerId, canEdit, t }: { profile: any; custom
               )}
             </div>
             {profile.notes && <p className="text-sm text-muted-foreground mt-1">{profile.notes}</p>}
+            {m?.updatedAt && (
+              <p className="text-xs text-muted-foreground/70 mt-1 flex items-center gap-1">
+                <Ruler className="w-3 h-3 inline shrink-0" />
+                {t('lastMeasurementUpdate')} {format(new Date(m.updatedAt), 'yyyy/MM/dd')}
+              </p>
+            )}
           </div>
         </div>
 
