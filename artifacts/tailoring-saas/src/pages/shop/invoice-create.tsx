@@ -48,30 +48,33 @@ export function InvoiceCreate() {
   const totalAmount = subOrders.reduce((sum, o) => sum + (Number(o.price) || 0), 0);
   const totalPaid = subOrders.reduce((sum, o) => sum + (Number(o.paidAmount) || 0), 0);
 
-  const handleSubmit = () => {
-    if (subOrders.some(o => !o.profileId)) {
-      toast({ title: t('error'), description: t('mustSelectProfile'), variant: 'destructive' });
-      return;
+const handleSubmit = () => {
+  if (subOrders.some(o => !o.profileId)) {
+    toast({ title: t('error'), description: t('mustSelectProfile'), variant: 'destructive' });
+    return;
+  }
+  if (subOrders.some(o => !o.quantity || Number(o.quantity) <= 0)) {
+    toast({ title: t('error'), description: t('mustEnterQty'), variant: 'destructive' });
+    return;
+  }
+  if (Number(subOrders[0].price) <= 0) {
+    toast({ title: t('error'), description: t('mustEnterPrice'), variant: 'destructive' });
+    return;
+  }
+  if (Number(subOrders[0].paidAmount) > Number(subOrders[0].price)) {
+    toast({ title: t('error'), description: t('paidExceedsPriceToast'), variant: 'destructive' });
+    return;
+  }
+
+  console.log('SUBORDERS_BEFORE_SAVE', subOrders);
+
+  mutation.mutate({
+    data: {
+      customerId,
+      subOrders,
     }
-    if (subOrders.some(o => !o.quantity || Number(o.quantity) <= 0)) {
-      toast({ title: t('error'), description: t('mustEnterQty'), variant: 'destructive' });
-      return;
-    }
-    if (Number(subOrders[0].price) <= 0) {
-      toast({ title: t('error'), description: t('mustEnterPrice'), variant: 'destructive' });
-      return;
-    }
-    if (Number(subOrders[0].paidAmount) > Number(subOrders[0].price)) {
-      toast({ title: t('error'), description: t('paidExceedsPriceToast'), variant: 'destructive' });
-      return;
-    }
-    mutation.mutate({
-      data: {
-        customerId,
-        subOrders,
-      }
-    });
-  };
+  });
+};
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 max-w-4xl mx-auto">
