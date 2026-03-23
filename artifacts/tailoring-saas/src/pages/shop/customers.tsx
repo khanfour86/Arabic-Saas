@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { toEnglishDigits } from '@/lib/digits';
-import { useListCustomers, useCreateCustomer } from '@workspace/api-client-react';
+import { useListCustomers, useCreateCustomer, getCustomer } from '@workspace/api-client-react';
 import { useTranslation } from '@/lib/i18n';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -176,20 +176,59 @@ function CustomerCreateDialog({ trigger, initialPhone = '' }: { trigger?: React.
 
   useEffect(() => { setPhone(initialPhone); }, [initialPhone]);
 
-  const mutation = useCreateCustomer({
-    mutation: {
-      onSuccess: (data) => {
-        queryClient.invalidateQueries({ queryKey: ['/api/shop/customers'] });
-        toast({ title: t('customerAdded') });
-        setOpen(false);
-        setPhone('');
-        setLocation(`/shop/customers/${data.id}`);
-      },
-      onError: (err: any) => {
-        toast({ title: t('error'), description: err?.message || t('phoneRegistered'), variant: 'destructive' });
+const mutation = useCreateCustomer({
+  mutation: {
+    onSuccess: async (data) => {
+      // حدّث قائمة العملاء مباشرة في الكاش
+      queryClient.setQueryData(['/api/shop/customers'], (old: any) => {
+        if (!old?.customers) {
+          return { customers: [data] };
+        }
+
+        const exists = old.customers.some((c: any) => c.id === data.id);
+        if (exists) return old;
+
+        return {
+          ...old,
+          customers: [data, ...old.customers],
+        };
+      });
+
+      // أعد تحميل قائمة العملاء من السيرفر
+      await queryClient.invalidateQueries({
+        queryKey: ['/api/shop/customers'],
+      });
+
+      // انتظر حتى تصير صفحة العميل الجديد جاهزة
+      let customerReady = false;
+      let attempts = 0;
+
+      while (!customerReady && attempts < 8) {
+        try {
+          await getCustomer(data.id);
+          customerReady = true;
+        } catch {
+          attempts += 1;
+          await new Promise((resolve) => setTimeout(resolve, 400));
+        }
       }
-    }
-  });
+
+      toast({ title: t('customerAdded') });
+      setOpen(false);
+      setPhone('');
+
+      // افتح صفحة العميل الجديد بعد ما نتأكد إنها جاهزة
+      setLocation(`/shop/customers/${data.id}`);
+    },
+    onError: (err: any) => {
+      toast({
+        title: t('error'),
+        description: err?.message || t('phoneRegistered'),
+        variant: 'destructive',
+      });
+    },
+  },
+});
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
