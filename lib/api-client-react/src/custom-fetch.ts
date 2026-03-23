@@ -9,11 +9,20 @@ export type BodyType<T> = T;
 const NO_BODY_STATUS = new Set([204, 205, 304]);
 const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
 
+const API_BASE_URL =
+  (typeof import.meta !== "undefined" &&
+    (import.meta as ImportMeta & { env?: Record<string, string> }).env
+      ?.VITE_API_URL) ||
+  "https://workspaceapi-server-production-4a42.up.railway.app";
+
 function isRequest(input: RequestInfo | URL): input is Request {
   return typeof Request !== "undefined" && input instanceof Request;
 }
 
-function resolveMethod(input: RequestInfo | URL, explicitMethod?: string): string {
+function resolveMethod(
+  input: RequestInfo | URL,
+  explicitMethod?: string,
+): string {
   if (explicitMethod) return explicitMethod.toUpperCase();
   if (isRequest(input)) return input.method.toUpperCase();
   return "GET";
@@ -29,6 +38,11 @@ function resolveUrl(input: RequestInfo | URL): string {
   if (typeof input === "string") return input;
   if (isUrl(input)) return input.toString();
   return input.url;
+}
+
+function withBaseUrl(url: string): string {
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  return `${API_BASE_URL}${url}`;
 }
 
 function mergeHeaders(...sources: Array<HeadersInit | undefined>): Headers {
@@ -207,7 +221,6 @@ async function parseErrorBody(response: Response, method: string): Promise<unkno
 
   const mediaType = getMediaType(response.headers);
 
-  // Fall back to text when blob() is unavailable (e.g. some React Native builds).
   if (mediaType && !isJsonMediaType(mediaType) && !isTextMediaType(mediaType)) {
     return typeof response.blob === "function" ? response.blob() : response.text();
   }
@@ -263,8 +276,7 @@ async function parseSuccessBody(
     case "blob":
       if (typeof response.blob !== "function") {
         throw new TypeError(
-          "Blob responses are not supported in this runtime. " +
-            "Use responseType \"json\" or \"text\" instead.",
+          'Blob responses are not supported in this runtime. Use responseType "json" or "text" instead.',
         );
       }
       return response.blob();
@@ -283,7 +295,17 @@ export async function customFetch<T = unknown>(
     throw new TypeError(`customFetch: ${method} requests cannot have a body.`);
   }
 
-  const headers = mergeHeaders(isRequest(input) ? input.headers : undefined, headersInit);
+  const headers = mergeHeaders(
+    isRequest(input) ? input.headers : undefined,
+    headersInit,
+  );
+
+  const token =
+    typeof window !== "undefined" ? window.localStorage.getItem("auth_token") : null;
+
+  if (token && !headers.has("authorization")) {
+    headers.set("authorization", `Bearer ${token}`);
+  }
 
   if (
     typeof init.body === "string" &&
@@ -297,9 +319,10 @@ export async function customFetch<T = unknown>(
     headers.set("accept", DEFAULT_JSON_ACCEPT);
   }
 
-  const requestInfo = { method, url: resolveUrl(input) };
+  const resolvedUrl = withBaseUrl(resolveUrl(input));
+  const requestInfo = { method, url: resolvedUrl };
 
-  const response = await fetch(input, { ...init, method, headers });
+  const response = await fetch(resolvedUrl, { ...init, method, headers });
 
   if (!response.ok) {
     const errorData = await parseErrorBody(response, method);
