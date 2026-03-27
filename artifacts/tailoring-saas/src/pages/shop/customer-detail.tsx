@@ -854,6 +854,7 @@ function MeasurementsDialog({ profile, customerId, t }: { profile: any; customer
     mutation: {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: [`/api/shop/customers/${customerId}`] });
+        queryClient.invalidateQueries({ queryKey: [`/api/shop/customers/${customerId}/activity`] });
         toast({ title: t('measurementsSaved') });
         setOpen(false);
       },
