@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { User, Phone, Plus, Loader2, FilePlus, Save, Ruler, StickyNote, Scissors, Pencil, X, Check } from 'lucide-react';
+import { User, Phone, Plus, Loader2, FilePlus, Save, Ruler, StickyNote, Scissors, Pencil, X, Check, Clock, FileText, ChevronRight } from 'lucide-react';
 import { Link, useParams } from 'wouter';
 import { format } from 'date-fns';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
@@ -215,6 +215,12 @@ export function CustomerDetail() {
     queryFn: () => fetch('/api/shop/status').then(r => r.ok ? r.json() : null),
     staleTime: 60000, retry: false,
   });
+
+  const { data: activityData } = useQuery({
+    queryKey: [`/api/shop/customers/${customerId}/activity`],
+    queryFn: () => fetch(`/api/shop/customers/${customerId}/activity`).then(r => r.ok ? r.json() : null),
+    enabled: !!customerId,
+  });
   const isRestricted = shopStatusData?.subscriptionStatus === 'expired' || shopStatusData?.subscriptionStatus === 'suspended';
 
   const canEdit = (user?.role === 'shop_manager' || user?.role === 'reception') && !isRestricted;
@@ -319,6 +325,117 @@ export function CustomerDetail() {
             t={t}
           />
         ))}
+      </div>
+
+      {/* Measurement Updates */}
+      <div>
+        <h2 className="text-2xl font-display font-bold text-primary flex items-center gap-2 mb-4">
+          <div className="w-2 h-6 bg-primary/40 rounded-full" />
+          <Clock className="w-5 h-5" />
+          {t('recentMeasurementUpdates')}
+        </h2>
+        <Card className="border-0 shadow-lg rounded-2xl overflow-hidden">
+          <CardContent className="p-0">
+            {!activityData ? (
+              <div className="flex justify-center p-6"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+            ) : activityData.measurementUpdates?.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 p-8 text-muted-foreground">
+                <Ruler className="w-6 h-6 opacity-40" />
+                <p className="text-sm">{t('noMeasurementUpdates')}</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-border">
+                {activityData.measurementUpdates?.map((u: any) => (
+                  <div key={u.profileId} className="flex items-center gap-4 px-5 py-3 hover:bg-muted/30 transition-colors">
+                    <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                      <Ruler className="w-4 h-4 text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-sm truncate">{u.profileName}</p>
+                      <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground mt-0.5">
+                        {[
+                          { k: t('mLength'), v: u.length },
+                          { k: t('mShoulder'), v: u.shoulder },
+                          { k: t('mChest'), v: u.chest },
+                          { k: t('mSleeve'), v: u.sleeve },
+                          { k: t('mNeck'), v: u.neck },
+                        ].filter(f => f.v != null).map(f => (
+                          <span key={f.k}><span className="text-muted-foreground/60">{f.k}:</span> <span className="font-medium text-foreground">{f.v}</span></span>
+                        ))}
+                      </div>
+                    </div>
+                    <span className="text-xs text-muted-foreground shrink-0">{format(new Date(u.updatedAt), 'yyyy/MM/dd')}</span>
+                  </div>
+                ))}
+                {activityData.measurementTotal > 5 && (
+                  <Link href={`/shop/customers/${customer.id}`}>
+                    <button className="w-full flex items-center justify-center gap-1.5 py-3 text-sm text-primary font-bold hover:bg-muted/30 transition-colors">
+                      {t('showMore')} ({activityData.measurementTotal - 5})
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </Link>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Recent Invoices */}
+      <div>
+        <h2 className="text-2xl font-display font-bold text-primary flex items-center gap-2 mb-4">
+          <div className="w-2 h-6 bg-accent/60 rounded-full" />
+          <FileText className="w-5 h-5" />
+          {t('recentCustomerInvoices')}
+        </h2>
+        <Card className="border-0 shadow-lg rounded-2xl overflow-hidden">
+          <CardContent className="p-0">
+            {!activityData ? (
+              <div className="flex justify-center p-6"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+            ) : activityData.invoices?.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 p-8 text-muted-foreground">
+                <FileText className="w-6 h-6 opacity-40" />
+                <p className="text-sm">{t('noRecentInvoices')}</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-border">
+                {activityData.invoices?.map((inv: any) => {
+                  const isDelivered = inv.status === 'delivered';
+                  const isReady = !isDelivered && inv.allSubOrdersReady;
+                  const badgeCls = isDelivered
+                    ? 'bg-emerald-100 text-emerald-700'
+                    : isReady
+                    ? 'bg-blue-100 text-blue-700'
+                    : 'bg-amber-100 text-amber-700';
+                  const badgeLabel = isDelivered ? t('statusDeliveredFull') : isReady ? t('statusReadyDelivery') : t('statusUnder');
+                  return (
+                    <Link key={inv.id} href={`/shop/invoices/${inv.id}`}>
+                      <div className="flex items-center gap-4 px-5 py-3 hover:bg-muted/30 transition-colors cursor-pointer">
+                        <div className="w-9 h-9 rounded-xl bg-accent/10 flex items-center justify-center shrink-0">
+                          <FileText className="w-4 h-4 text-accent-foreground" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-sm">{t('invoiceNum')}{inv.invoiceNumber}</p>
+                          <p className="text-xs text-muted-foreground">{format(new Date(inv.createdAt), 'yyyy/MM/dd')}</p>
+                        </div>
+                        <span className={`text-xs font-bold px-2.5 py-1 rounded-full shrink-0 ${badgeCls}`}>{badgeLabel}</span>
+                        <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                      </div>
+                    </Link>
+                  );
+                })}
+                {activityData.invoiceTotal > 5 && (
+                  <Link href={`/shop/invoices?customerId=${customer.id}`}>
+                    <button className="w-full flex items-center justify-center gap-1.5 py-3 text-sm text-primary font-bold hover:bg-muted/30 transition-colors">
+                      {t('showMore')} ({activityData.invoiceTotal - 5})
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </Link>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

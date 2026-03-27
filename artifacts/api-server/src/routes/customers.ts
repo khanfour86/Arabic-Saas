@@ -1,6 +1,6 @@
 import { Router, type IRouter, type RequestHandler } from "express";
-import { db, customersTable, profilesTable, measurementsTable, shopsTable } from "@workspace/db";
-import { eq, and, ilike, desc } from "drizzle-orm";
+import { db, customersTable, profilesTable, measurementsTable, shopsTable, invoicesTable } from "@workspace/db";
+import { eq, and, ilike, desc, count } from "drizzle-orm";
 import { CreateCustomerBody, UpdateCustomerBody, CreateProfileBody } from "@workspace/api-zod";
 import { requireAuth, requireShopRole, type AuthUser } from "../lib/auth";
 
@@ -153,6 +153,62 @@ router.get("/shop/customers/:customerId", isShopUser, async (req, res): Promise<
 
   const profiles = await getProfilesWithMeasurements(user.shopId!, customer.id);
   res.json({ ...customer, profiles });
+});
+
+router.get("/shop/customers/:customerId/activity", isShopUser, async (req, res): Promise<void> => {
+  const user = (req as any).user as AuthUser;
+  const customerId = parseInt(Array.isArray(req.params.customerId) ? req.params.customerId[0] : req.params.customerId, 10);
+
+  // Verify customer belongs to this shop
+  const [customer] = await db.select({ id: customersTable.id })
+    .from(customersTable)
+    .where(and(eq(customersTable.shopId, user.shopId!), eq(customersTable.id, customerId)));
+  if (!customer) { res.status(404).json({ error: "العميل غير موجود" }); return; }
+
+  // Measurement updates: profiles + measurements sorted by updatedAt desc
+  const profiles = await db.select({
+    profileId: profilesTable.id,
+    profileName: profilesTable.name,
+    isMain: profilesTable.isMain,
+    updatedAt: measurementsTable.updatedAt,
+    length: measurementsTable.length,
+    shoulder: measurementsTable.shoulder,
+    chest: measurementsTable.chest,
+    sleeve: measurementsTable.sleeve,
+    neck: measurementsTable.neck,
+  })
+    .from(profilesTable)
+    .innerJoin(measurementsTable, eq(measurementsTable.profileId, profilesTable.id))
+    .where(and(eq(profilesTable.shopId, user.shopId!), eq(profilesTable.customerId, customerId)))
+    .orderBy(desc(measurementsTable.updatedAt));
+
+  const measurementTotal = profiles.length;
+  const measurementUpdates = profiles.slice(0, 5).map(p => ({
+    ...p,
+    length: p.length ? parseFloat(p.length) : null,
+    shoulder: p.shoulder ? parseFloat(p.shoulder) : null,
+    chest: p.chest ? parseFloat(p.chest) : null,
+    sleeve: p.sleeve ? parseFloat(p.sleeve) : null,
+    neck: p.neck ? parseFloat(p.neck) : null,
+  }));
+
+  // Invoices: for this customer sorted by createdAt desc
+  const allInvoices = await db.select({
+    id: invoicesTable.id,
+    invoiceNumber: invoicesTable.invoiceNumber,
+    status: invoicesTable.status,
+    createdAt: invoicesTable.createdAt,
+    deliveredAt: invoicesTable.deliveredAt,
+    allSubOrdersReady: invoicesTable.allSubOrdersReady,
+  })
+    .from(invoicesTable)
+    .where(and(eq(invoicesTable.shopId, user.shopId!), eq(invoicesTable.customerId, customerId)))
+    .orderBy(desc(invoicesTable.createdAt));
+
+  const invoiceTotal = allInvoices.length;
+  const invoices = allInvoices.slice(0, 5);
+
+  res.json({ measurementUpdates, measurementTotal, invoices, invoiceTotal });
 });
 
 router.patch("/shop/customers/:customerId", isShopUser, requireActiveShop, async (req, res): Promise<void> => {
