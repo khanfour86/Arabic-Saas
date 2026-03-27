@@ -401,21 +401,28 @@ router.put("/shop/measurements/:profileId", isShopUser, requireActiveShop, async
 
   let m;
   if (existing.length > 0) {
+    const old = existing[0];
+    // Save OLD values to history BEFORE applying the update
+    await db.insert(measurementHistoryTable).values({
+      profileId,
+      customerId: profile.customerId,
+      shopId: user.shopId!,
+      length: old.length,
+      shoulder: old.shoulder,
+      chest: old.chest,
+      sleeve: old.sleeve,
+      neck: old.neck,
+      modelNotes: old.modelNotes,
+      generalNotes: old.generalNotes,
+    });
     const [updated] = await db.update(measurementsTable).set(measurementValues)
       .where(eq(measurementsTable.profileId, profileId)).returning();
     m = updated;
   } else {
+    // First-time insert — no previous values to save as history
     const [created] = await db.insert(measurementsTable).values({ profileId, ...measurementValues }).returning();
     m = created;
   }
-
-  // Save a history record for every update
-  await db.insert(measurementHistoryTable).values({
-    profileId,
-    customerId: profile.customerId,
-    shopId: user.shopId!,
-    ...measurementValues,
-  });
 
   res.json({
     id: m.id,
