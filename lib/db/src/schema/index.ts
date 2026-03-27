@@ -5,5 +5,6 @@ export * from "./profiles";
 export * from "./measurements";
 export * from "./measurement_history";
 export * from "./invoices";
+export * from "./invoice_history";
 export * from "./suborders";
 export * from "./sessions";

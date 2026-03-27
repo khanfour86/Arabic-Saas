@@ -82,6 +82,57 @@ export function InvoiceEdit() {
     setOrders(prev => prev.filter((_, i) => i !== index));
   };
 
+  const computeDiff = (): any[] => {
+    const changes: any[] = [];
+    const fieldLabels: Record<string, string> = {
+      quantity: 'qty',
+      price: 'price',
+      paidAmount: 'paidAmount',
+      fabricSource: 'fabricSource',
+      fabricDescription: 'fabricDescription',
+    };
+
+    for (const curr of orders.filter(o => !o.isNew)) {
+      const orig = (inv?.subOrders ?? []).find((s: any) => s.id === curr.id);
+      if (!orig) continue;
+      for (const field of Object.keys(fieldLabels) as (keyof EditableSubOrder)[]) {
+        const oldRaw = orig[field];
+        const newRaw = curr[field];
+        const oldNum = parseFloat(String(oldRaw ?? '0'));
+        const newNum = parseFloat(String(newRaw ?? '0'));
+        const isNumeric = ['quantity', 'price', 'paidAmount'].includes(field as string);
+        const changed = isNumeric
+          ? Math.abs(oldNum - newNum) > 0.0001
+          : String(oldRaw ?? '') !== String(newRaw ?? '');
+        if (changed) {
+          changes.push({
+            type: 'updated',
+            subOrderId: curr.id,
+            subOrderNumber: orig.subOrderNumber,
+            profileName: orig.profileName,
+            field,
+            oldValue: oldRaw,
+            newValue: newRaw,
+          });
+        }
+      }
+    }
+
+    for (const curr of orders.filter(o => o.isNew)) {
+      const profile = (customer?.profiles ?? []).find((p: any) => p.id === curr.profileId);
+      changes.push({
+        type: 'added',
+        profileName: profile?.name ?? String(curr.profileId),
+        quantity: curr.quantity,
+        fabricSource: curr.fabricSource,
+        price: curr.price,
+        paidAmount: curr.paidAmount,
+      });
+    }
+
+    return changes;
+  };
+
   const handleSave = async () => {
     const newOnes = orders.filter(o => o.isNew);
     if (newOnes.some(o => !o.profileId)) {
@@ -97,10 +148,12 @@ export function InvoiceEdit() {
       return;
     }
 
+    const diffChanges = computeDiff();
+
     setSaving(true);
     try {
       const existing = orders.filter(o => !o.isNew && o.id);
-      const newOnes = orders.filter(o => o.isNew);
+      const toAdd = orders.filter(o => o.isNew);
 
       await Promise.all(
         existing.map(o =>
@@ -119,7 +172,7 @@ export function InvoiceEdit() {
         )
       );
 
-      for (const o of newOnes) {
+      for (const o of toAdd) {
         await fetch('/api/shop/suborders', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -136,7 +189,16 @@ export function InvoiceEdit() {
         });
       }
 
+      if (diffChanges.length > 0) {
+        await fetch(`/api/shop/invoices/${invoiceId}/history`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ changes: diffChanges }),
+        });
+      }
+
       queryClient.invalidateQueries({ queryKey: [`/api/shop/invoices/${invoiceId}`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/shop/invoices/${invoiceId}/history`] });
       queryClient.invalidateQueries({ queryKey: ['/api/shop/invoices'] });
       toast({ title: t('ordersUpdated') });
       setLocation(`/shop/invoices/${invoiceId}`);

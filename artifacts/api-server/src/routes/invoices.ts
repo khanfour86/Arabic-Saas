@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, invoicesTable, subOrdersTable, customersTable, profilesTable, measurementsTable, shopsTable } from "@workspace/db";
+import { db, invoicesTable, subOrdersTable, customersTable, profilesTable, measurementsTable, shopsTable, invoiceHistoryTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { type AuthUser } from "../lib/auth";
 import { isShopUser, isManagerOrReception, requireActiveShop } from "../lib/shopMiddleware";
@@ -306,6 +306,46 @@ router.get("/shop/invoices/:invoiceId/whatsapp", isManagerOrReception, async (re
 حياك تقدر تسلم طلبك في أي وقت 🙏`;
 
   res.json({ message, phone, invoiceNumber: invoice.invoiceNumber, remainingAmount });
+});
+
+// GET /api/shop/invoices/:id/history
+router.get('/shop/invoices/:id/history', isShopUser, requireActiveShop, async (req, res) => {
+  const user = req.user as AuthUser;
+  const id = parseInt(req.params.id);
+
+  const [invoice] = await db.select().from(invoicesTable)
+    .where(and(eq(invoicesTable.id, id), eq(invoicesTable.shopId, user.shopId!)));
+  if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
+
+  const history = await db.select().from(invoiceHistoryTable)
+    .where(eq(invoiceHistoryTable.invoiceId, id))
+    .orderBy(desc(invoiceHistoryTable.changedAt));
+
+  res.json(history);
+});
+
+// POST /api/shop/invoices/:id/history
+router.post('/shop/invoices/:id/history', isManagerOrReception, requireActiveShop, async (req, res) => {
+  const user = req.user as AuthUser;
+  const id = parseInt(req.params.id);
+
+  const [invoice] = await db.select().from(invoicesTable)
+    .where(and(eq(invoicesTable.id, id), eq(invoicesTable.shopId, user.shopId!)));
+  if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
+
+  const { changes } = req.body;
+  if (!changes || !Array.isArray(changes) || changes.length === 0) {
+    return res.status(400).json({ error: 'No changes provided' });
+  }
+
+  const [entry] = await db.insert(invoiceHistoryTable).values({
+    invoiceId: id,
+    shopId: user.shopId!,
+    changedByUsername: (user as any).username ?? null,
+    changes,
+  }).returning();
+
+  res.json(entry);
 });
 
 export default router;
