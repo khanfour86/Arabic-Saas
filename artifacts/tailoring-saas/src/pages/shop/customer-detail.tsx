@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { User, Phone, Plus, Loader2, FilePlus, Save, Ruler, StickyNote, Scissors, Pencil, X, Check, Clock, FileText, ChevronRight } from 'lucide-react';
 import { Link, useParams } from 'wouter';
 import { format } from 'date-fns';
@@ -208,7 +209,8 @@ export function CustomerDetail() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { t } = useTranslation();
+  const { t, dir } = useTranslation();
+  const [selectedProfileId, setSelectedProfileId] = React.useState<number | null>(null);
 
   const { data: shopStatusData } = useQuery({
     queryKey: ['/api/shop/status'],
@@ -235,6 +237,14 @@ export function CustomerDetail() {
       onError: () => toast({ title: t('updateError'), variant: 'destructive' }),
     }
   });
+
+  // Initialize to main profile once customer data loads
+  React.useEffect(() => {
+    if (!customer) return;
+    const mainProfiles = customer.profiles.filter((p: any) => !p.isProof);
+    const main = mainProfiles.find((p: any) => p.isMain) ?? mainProfiles[0];
+    if (main && selectedProfileId === null) setSelectedProfileId(main.id);
+  }, [customer]);
 
   if (isLoading) return <div className="flex justify-center p-12"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
   if (!customer) return <div>{t('customerNotFound')}</div>;
@@ -307,25 +317,58 @@ export function CustomerDetail() {
         </CardContent>
       </Card>
 
-      <div className="flex items-center justify-between mt-8 mb-4">
+      {/* Profiles section header */}
+      <div className="flex items-center justify-between mt-8 mb-2">
         <h2 className="text-2xl font-display font-bold text-primary flex items-center gap-2">
           <div className="w-2 h-6 bg-accent rounded-full" />
-          {t('measurementProfiles')} ({customer.profiles.filter((p: any) => !p.isProof).length})
+          {t('measurementProfiles')}
         </h2>
         <ProfileCreateDialog customerId={customer.id} t={t} />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {customer.profiles.filter((p: any) => !p.isProof).map((profile: any) => (
-          <ProfileCard
-            key={profile.id}
-            profile={profile}
-            customerId={customer.id}
-            canEdit={canEdit}
-            t={t}
-          />
-        ))}
-      </div>
+      {/* Profile selector dropdown */}
+      {(() => {
+        const mainProfiles = customer.profiles.filter((p: any) => !p.isProof);
+        const activeProfile = mainProfiles.find((p: any) => p.id === selectedProfileId) ?? mainProfiles[0];
+        return (
+          <>
+            {mainProfiles.length > 1 && (
+              <div className="flex items-center gap-3 mb-4">
+                <label className="text-sm font-bold text-muted-foreground whitespace-nowrap">{t('selectProfile')}:</label>
+                <Select
+                  value={selectedProfileId?.toString() ?? ''}
+                  onValueChange={(val) => setSelectedProfileId(parseInt(val))}
+                  dir={dir}
+                >
+                  <SelectTrigger className="bg-white border-primary/20 rounded-xl shadow-sm max-w-xs font-bold">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent dir={dir}>
+                    {mainProfiles.map((p: any) => (
+                      <SelectItem key={p.id} value={p.id.toString()}>
+                        {p.name}
+                        {p.isMain && (
+                          <span className="text-[10px] bg-accent/20 text-accent-foreground px-1.5 py-0.5 rounded-full mr-1.5">{t('badgeMain')}</span>
+                        )}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {activeProfile && (
+              <ProfileCard
+                key={activeProfile.id}
+                profile={activeProfile}
+                customerId={customer.id}
+                canEdit={canEdit}
+                t={t}
+              />
+            )}
+          </>
+        );
+      })()}
 
       {/* Measurement Updates */}
       <div>
