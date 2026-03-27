@@ -211,6 +211,7 @@ export function CustomerDetail() {
   const { toast } = useToast();
   const { t, dir } = useTranslation();
   const [selectedProfileId, setSelectedProfileId] = React.useState<number | null>(null);
+  const [measurementPopup, setMeasurementPopup] = React.useState<any | null>(null);
 
   const { data: shopStatusData } = useQuery({
     queryKey: ['/api/shop/status'],
@@ -389,7 +390,11 @@ export function CustomerDetail() {
             ) : (
               <div className="divide-y divide-border">
                 {activityData.measurementUpdates?.map((u: any) => (
-                  <div key={u.profileId} className="flex items-center gap-4 px-5 py-3 hover:bg-muted/30 transition-colors">
+                  <button
+                    key={u.profileId}
+                    onClick={() => setMeasurementPopup(u)}
+                    className="w-full flex items-center gap-4 px-5 py-3 hover:bg-muted/30 active:bg-muted/50 transition-colors cursor-pointer text-start"
+                  >
                     <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
                       <Ruler className="w-4 h-4 text-primary" />
                     </div>
@@ -408,7 +413,7 @@ export function CustomerDetail() {
                       </div>
                     </div>
                     <span className="text-xs text-muted-foreground shrink-0">{format(new Date(u.updatedAt), 'yyyy/MM/dd')}</span>
-                  </div>
+                  </button>
                 ))}
                 {activityData.measurementTotal > 5 && (
                   <Link href={`/shop/customers/${customer.id}`}>
@@ -423,6 +428,78 @@ export function CustomerDetail() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Measurement detail popup */}
+      <Dialog open={!!measurementPopup} onOpenChange={(open) => { if (!open) setMeasurementPopup(null); }}>
+        <DialogContent dir={dir} className="sm:max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="font-display text-xl text-primary flex items-center gap-2">
+              <Ruler className="w-5 h-5" />
+              {measurementPopup?.profileName}
+              {measurementPopup?.isMain && (
+                <span className="text-[10px] bg-accent/20 text-accent-foreground px-2 py-0.5 rounded-full">{t('badgeMain')}</span>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+
+          {measurementPopup && (
+            <div className="space-y-5 mt-2">
+              {/* Date */}
+              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                <Clock className="w-3 h-3" />
+                {t('lastMeasurementUpdate')} {format(new Date(measurementPopup.updatedAt), 'yyyy/MM/dd')}
+              </p>
+
+              {/* Measurements grid */}
+              <div className="grid grid-cols-5 gap-2 text-center text-sm">
+                {[
+                  { label: t('mLength'), value: measurementPopup.length },
+                  { label: t('mShoulder'), value: measurementPopup.shoulder },
+                  { label: t('mChest'), value: measurementPopup.chest },
+                  { label: t('mSleeve'), value: measurementPopup.sleeve },
+                  { label: t('mNeck'), value: measurementPopup.neck },
+                ].map(({ label, value }) => (
+                  <div key={label} className="bg-muted/40 p-3 rounded-xl">
+                    <div className="text-muted-foreground text-xs mb-1">{label}</div>
+                    <div className="font-bold text-primary text-base">{value ?? '-'}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Model notes */}
+              {measurementPopup.modelNotes && (
+                <div className="bg-accent/10 border border-accent/20 rounded-xl p-3 flex gap-2 items-start">
+                  <Scissors className="w-4 h-4 text-accent-foreground mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-xs font-bold text-accent-foreground mb-1">{t('modelNotes')}</p>
+                    <p className="text-sm leading-relaxed whitespace-pre-wrap">{measurementPopup.modelNotes}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* General notes */}
+              {measurementPopup.generalNotes && (
+                <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 flex gap-2 items-start">
+                  <StickyNote className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-xs font-bold text-blue-600 mb-1">{t('generalNotes')}</p>
+                    <p className="text-sm leading-relaxed whitespace-pre-wrap">{measurementPopup.generalNotes}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Close button */}
+              <Button
+                variant="outline"
+                className="w-full rounded-xl"
+                onClick={() => setMeasurementPopup(null)}
+              >
+                <X className="w-4 h-4 ml-2" /> {t('closeDialog')}
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Recent Invoices */}
       <div>

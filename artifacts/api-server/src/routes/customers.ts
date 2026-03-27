@@ -176,6 +176,8 @@ router.get("/shop/customers/:customerId/activity", isShopUser, async (req, res):
     chest: measurementsTable.chest,
     sleeve: measurementsTable.sleeve,
     neck: measurementsTable.neck,
+    modelNotes: measurementsTable.modelNotes,
+    generalNotes: measurementsTable.generalNotes,
   })
     .from(profilesTable)
     .innerJoin(measurementsTable, eq(measurementsTable.profileId, profilesTable.id))
