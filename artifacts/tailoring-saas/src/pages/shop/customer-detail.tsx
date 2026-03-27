@@ -212,6 +212,7 @@ export function CustomerDetail() {
   const { t, dir } = useTranslation();
   const [selectedProfileId, setSelectedProfileId] = React.useState<number | null>(null);
   const [measurementPopup, setMeasurementPopup] = React.useState<any | null>(null);
+  const [showAllMeasurements, setShowAllMeasurements] = React.useState(false);
 
   const { data: shopStatusData } = useQuery({
     queryKey: ['/api/shop/status'],
@@ -250,10 +251,9 @@ export function CustomerDetail() {
   if (isLoading) return <div className="flex justify-center p-12"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
   if (!customer) return <div>{t('customerNotFound')}</div>;
 
+  const allMeasurementUpdates: any[] = activityData?.measurementUpdates ?? [];
   const filteredMeasurements = activityData
-    ? (selectedProfileId
-        ? activityData.measurementUpdates?.filter((u: any) => u.profileId === selectedProfileId)
-        : activityData.measurementUpdates)
+    ? (showAllMeasurements ? allMeasurementUpdates : allMeasurementUpdates.slice(0, 5))
     : null;
 
   return (
@@ -421,6 +421,15 @@ export function CustomerDetail() {
                     <span className="text-xs text-muted-foreground shrink-0">{format(new Date(u.updatedAt), 'yyyy/MM/dd')}</span>
                   </button>
                 ))}
+                {!showAllMeasurements && allMeasurementUpdates.length > 5 && (
+                  <button
+                    onClick={() => setShowAllMeasurements(true)}
+                    className="w-full flex items-center justify-center gap-1.5 py-3 text-sm text-primary font-bold hover:bg-muted/30 transition-colors border-t border-border"
+                  >
+                    {t('showMore')} ({allMeasurementUpdates.length - 5})
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             )}
           </CardContent>

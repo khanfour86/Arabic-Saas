@@ -185,7 +185,7 @@ router.get("/shop/customers/:customerId/activity", isShopUser, async (req, res):
     .orderBy(desc(measurementsTable.updatedAt));
 
   const measurementTotal = profiles.length;
-  const measurementUpdates = profiles.slice(0, 5).map(p => ({
+  const measurementUpdates = profiles.map(p => ({
     ...p,
     length: p.length ? parseFloat(p.length) : null,
     shoulder: p.shoulder ? parseFloat(p.shoulder) : null,
