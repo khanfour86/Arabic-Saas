@@ -6,7 +6,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Search, Loader2, FileText, CheckCircle, MessageCircle, ChevronLeft, ChevronRight, Calendar, Scissors, Plus, History, ArrowRight, UserCircle2 } from 'lucide-react';
+import { Search, Loader2, FileText, CheckCircle, MessageCircle, ChevronLeft, ChevronRight, Calendar, Scissors, Plus, History, ArrowRight, UserCircle2, X } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Link, useLocation, useParams, useSearch } from 'wouter';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
@@ -317,7 +318,9 @@ export function InvoiceDetail() {
 }
 
 function InvoiceHistorySection({ history, t, dir }: { history: any[]; t: Function; dir: string }) {
-  const fieldLabel = (field: string, t: Function): string => {
+  const [selectedEntry, setSelectedEntry] = useState<any | null>(null);
+
+  const fieldLabel = (field: string): string => {
     const map: Record<string, string> = {
       price: t('historyFieldPrice'),
       paidAmount: t('historyFieldPaid'),
@@ -328,16 +331,22 @@ function InvoiceHistorySection({ history, t, dir }: { history: any[]; t: Functio
     return map[field] ?? field;
   };
 
-  const fabricLabel = (val: string, t: Function): string =>
+  const fabricLabel = (val: string): string =>
     val === 'shop_fabric' ? t('shopFabricShort') : val === 'customer_fabric' ? t('customerFabricShort') : val;
 
-  const formatVal = (field: string, val: any, t: Function): string => {
-    if (field === 'fabricSource') return fabricLabel(String(val), t);
+  const formatVal = (field: string, val: any): string => {
+    if (field === 'fabricSource') return fabricLabel(String(val));
     if (['price', 'paidAmount'].includes(field)) return `${parseFloat(String(val || 0)).toFixed(3)} ${t('kwd')}`;
     return String(val ?? '—');
   };
 
+  const fmtKwd = (val: number) => `${val.toFixed(3)} ${t('kwd')}`;
+
   if (history.length === 0) return null;
+
+  const dialogChanges = selectedEntry ? (selectedEntry.changes ?? []).filter((c: any) => c.type !== 'summary') : [];
+  const dialogSummary = selectedEntry ? (selectedEntry.changes ?? []).find((c: any) => c.type === 'summary') : null;
+  const dialogDate = selectedEntry ? new Date(selectedEntry.changedAt) : null;
 
   return (
     <div className="mt-2">
@@ -350,16 +359,22 @@ function InvoiceHistorySection({ history, t, dir }: { history: any[]; t: Functio
       <div className="relative">
         <div className="absolute right-4 top-0 bottom-0 w-0.5 bg-border" />
         <div className="space-y-4">
-          {history.map((entry: any, i: number) => {
-            const changes: any[] = entry.changes ?? [];
+          {history.map((entry: any) => {
+            const changes: any[] = (entry.changes ?? []).filter((c: any) => c.type !== 'summary');
+            const summary = (entry.changes ?? []).find((c: any) => c.type === 'summary');
             const date = new Date(entry.changedAt);
+            const updatedCount = changes.filter((c: any) => c.type === 'updated').length;
+            const addedCount = changes.filter((c: any) => c.type === 'added').length;
             return (
               <div key={entry.id} className="relative pr-10">
                 <div className="absolute right-1 top-3 w-6 h-6 bg-primary/10 border-2 border-primary/30 rounded-full flex items-center justify-center">
                   <div className="w-2 h-2 bg-primary rounded-full" />
                 </div>
 
-                <Card className="border-0 shadow-sm rounded-2xl bg-white">
+                <Card
+                  className="border-0 shadow-sm rounded-2xl bg-white cursor-pointer active:scale-[0.99] transition-transform hover:shadow-md"
+                  onClick={() => setSelectedEntry(entry)}
+                >
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                       <div className="flex items-center gap-2">
@@ -367,55 +382,34 @@ function InvoiceHistorySection({ history, t, dir }: { history: any[]; t: Functio
                         <span className="text-sm font-bold text-foreground">{format(date, 'yyyy/MM/dd')}</span>
                         <span className="text-xs text-muted-foreground">{format(date, 'HH:mm')}</span>
                       </div>
-                      {entry.changedByUsername && (
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <UserCircle2 className="w-3.5 h-3.5" />
-                          <span>{t('changedBy')}: <span className="font-bold text-foreground">{entry.changedByUsername}</span></span>
-                        </div>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {entry.changedByUsername && (
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <UserCircle2 className="w-3.5 h-3.5" />
+                            <span>{t('changedBy')}: <span className="font-bold text-foreground">{entry.changedByUsername}</span></span>
+                          </div>
+                        )}
+                        <span className="text-xs text-primary font-medium underline underline-offset-2">{t('historyClickDetails')}</span>
+                      </div>
                     </div>
 
-                    <div className="space-y-2">
-                      {changes.map((ch: any, ci: number) => (
-                        <div key={ci} className={`rounded-xl p-3 text-sm ${ch.type === 'added' ? 'bg-emerald-50 border border-emerald-200' : 'bg-muted/50 border border-border/50'}`}>
-                          {ch.type === 'added' ? (
-                            <div className="flex items-start gap-2">
-                              <Plus className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
-                              <div>
-                                <span className="font-bold text-emerald-700">{t('historyAdded')}</span>
-                                <span className="text-muted-foreground mx-1">—</span>
-                                <span className="font-bold">{ch.profileName}</span>
-                                <div className="text-xs text-muted-foreground mt-1 flex gap-3 flex-wrap">
-                                  <span>{t('qty')} {ch.quantity}</span>
-                                  <span>{formatVal('price', ch.price, t)}</span>
-                                  <span>{fabricLabel(ch.fabricSource, t)}</span>
-                                </div>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="flex items-start gap-2">
-                              <ArrowRight className="w-4 h-4 text-primary mt-0.5 shrink-0" />
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                  <span className="font-bold text-primary">{ch.profileName}</span>
-                                  <span className="text-xs text-muted-foreground">({ch.subOrderNumber})</span>
-                                  <span className="text-muted-foreground">—</span>
-                                  <span className="font-medium">{fieldLabel(ch.field, t)}</span>
-                                </div>
-                                <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                                  <span className="bg-red-50 text-red-700 border border-red-200 px-2 py-0.5 rounded-lg text-xs font-bold line-through">
-                                    {formatVal(ch.field, ch.oldValue, t)}
-                                  </span>
-                                  <ArrowRight className="w-3 h-3 text-muted-foreground shrink-0" />
-                                  <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-lg text-xs font-bold">
-                                    {formatVal(ch.field, ch.newValue, t)}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      ))}
+                    {/* Summary chips */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {updatedCount > 0 && (
+                        <span className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2.5 py-1 rounded-full font-medium">
+                          {updatedCount} {dir === 'rtl' ? 'تعديل' : 'edit(s)'}
+                        </span>
+                      )}
+                      {addedCount > 0 && (
+                        <span className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-full font-medium">
+                          + {addedCount} {dir === 'rtl' ? 'طلب جديد' : 'new order(s)'}
+                        </span>
+                      )}
+                      {summary && Math.abs(summary.newTotal - summary.oldTotal) > 0.0001 && (
+                        <span className={`text-xs px-2.5 py-1 rounded-full font-medium border ${summary.newTotal > summary.oldTotal ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                          {fmtKwd(summary.oldTotal)} ← {fmtKwd(summary.newTotal)}
+                        </span>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -424,6 +418,117 @@ function InvoiceHistorySection({ history, t, dir }: { history: any[]; t: Functio
           })}
         </div>
       </div>
+
+      {/* Detail Dialog */}
+      <Dialog open={!!selectedEntry} onOpenChange={open => !open && setSelectedEntry(null)}>
+        <DialogContent dir={dir} className="max-w-lg max-h-[85vh] overflow-y-auto rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <History className="w-4 h-4 text-primary" />
+              {t('historyEntryDetails')}
+              {dialogDate && (
+                <span className="text-sm font-normal text-muted-foreground">
+                  — {format(dialogDate, 'yyyy/MM/dd')} {format(dialogDate, 'HH:mm')}
+                </span>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+
+          {selectedEntry && (
+            <div className="space-y-3 py-1">
+              {/* Changed by */}
+              {selectedEntry.changedByUsername && (
+                <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                  <UserCircle2 className="w-4 h-4" />
+                  <span>{t('changedBy')}: <span className="font-bold text-foreground">{selectedEntry.changedByUsername}</span></span>
+                </div>
+              )}
+
+              {/* All changes */}
+              <div className="space-y-2">
+                {dialogChanges.map((ch: any, ci: number) => (
+                  <div key={ci} className={`rounded-xl p-3 text-sm ${ch.type === 'added' ? 'bg-emerald-50 border border-emerald-200' : 'bg-muted/50 border border-border/50'}`}>
+                    {ch.type === 'added' ? (
+                      <div className="flex items-start gap-2">
+                        <Plus className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
+                        <div>
+                          <span className="font-bold text-emerald-700">{t('historyAdded')}</span>
+                          <span className="text-muted-foreground mx-1">—</span>
+                          <span className="font-bold">{ch.profileName}</span>
+                          <div className="flex gap-3 flex-wrap mt-1.5">
+                            <span className="text-xs bg-white border border-emerald-200 text-emerald-800 px-2 py-0.5 rounded-lg font-medium">{t('qty')} {ch.quantity}</span>
+                            <span className="text-xs bg-white border border-emerald-200 text-emerald-800 px-2 py-0.5 rounded-lg font-medium">{formatVal('price', ch.price)}</span>
+                            <span className="text-xs bg-white border border-emerald-200 text-emerald-800 px-2 py-0.5 rounded-lg font-medium">{fabricLabel(ch.fabricSource)}</span>
+                            {ch.paidAmount > 0 && (
+                              <span className="text-xs bg-white border border-emerald-200 text-emerald-800 px-2 py-0.5 rounded-lg font-medium">{t('historyFieldPaid')} {formatVal('paidAmount', ch.paidAmount)}</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-start gap-2">
+                        <ArrowRight className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-bold text-primary">{ch.profileName}</span>
+                            <span className="text-xs text-muted-foreground">({ch.subOrderNumber})</span>
+                            <span className="text-muted-foreground">—</span>
+                            <span className="font-medium">{fieldLabel(ch.field)}</span>
+                          </div>
+                          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                            <span className="bg-red-50 text-red-700 border border-red-200 px-2.5 py-1 rounded-lg text-sm font-bold line-through">
+                              {formatVal(ch.field, ch.oldValue)}
+                            </span>
+                            <ArrowRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                            <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-lg text-sm font-bold">
+                              {formatVal(ch.field, ch.newValue)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Totals summary */}
+              {dialogSummary && (
+                <div className="rounded-2xl border-2 border-primary/20 bg-primary/5 p-4 space-y-3 mt-2">
+                  <div className="flex items-center gap-2 mb-1">
+                    <FileText className="w-4 h-4 text-primary" />
+                    <span className="font-bold text-sm text-primary">{t('total')}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-center">
+                      <div className="text-xs text-red-500 mb-1">{t('summaryOldTotal')}</div>
+                      <div className="font-bold text-red-700 text-base line-through">{fmtKwd(dialogSummary.oldTotal)}</div>
+                    </div>
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-center">
+                      <div className="text-xs text-emerald-600 mb-1">{t('summaryNewTotal')}</div>
+                      <div className="font-bold text-emerald-700 text-base">{fmtKwd(dialogSummary.newTotal)}</div>
+                    </div>
+                    <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-center">
+                      <div className="text-xs text-red-500 mb-1">{t('summaryOldPaid')}</div>
+                      <div className="font-bold text-red-700 text-sm line-through">{fmtKwd(dialogSummary.oldPaid)}</div>
+                    </div>
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-center">
+                      <div className="text-xs text-emerald-600 mb-1">{t('summaryNewPaid')}</div>
+                      <div className="font-bold text-emerald-700 text-sm">{fmtKwd(dialogSummary.newPaid)}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" className="w-full rounded-xl" onClick={() => setSelectedEntry(null)}>
+              <X className="w-4 h-4 me-2" />
+              {t('closeDialog')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

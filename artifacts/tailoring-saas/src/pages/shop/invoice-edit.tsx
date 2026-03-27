@@ -130,6 +130,12 @@ export function InvoiceEdit() {
       });
     }
 
+    const oldTotal = (inv?.subOrders ?? []).reduce((s: number, so: any) => s + parseFloat(String(so.price || 0)), 0);
+    const newTotal = orders.reduce((s, o) => s + parseFloat(String(o.price || 0)), 0);
+    const oldPaid = (inv?.subOrders ?? []).reduce((s: number, so: any) => s + parseFloat(String(so.paidAmount || 0)), 0);
+    const newPaid = orders.reduce((s, o) => s + parseFloat(String(o.paidAmount || 0)), 0);
+    changes.push({ type: 'summary', oldTotal, newTotal, oldPaid, newPaid });
+
     return changes;
   };
 
