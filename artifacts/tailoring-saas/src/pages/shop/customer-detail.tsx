@@ -221,8 +221,13 @@ export function CustomerDetail() {
   });
 
   const { data: activityData } = useQuery({
-    queryKey: [`/api/shop/customers/${customerId}/activity`],
-    queryFn: () => fetch(`/api/shop/customers/${customerId}/activity`).then(r => r.ok ? r.json() : null),
+    queryKey: [`/api/shop/customers/${customerId}/activity`, selectedProfileId],
+    queryFn: () => {
+      const url = selectedProfileId
+        ? `/api/shop/customers/${customerId}/activity?profileId=${selectedProfileId}`
+        : `/api/shop/customers/${customerId}/activity`;
+      return fetch(url).then(r => r.ok ? r.json() : null);
+    },
     enabled: !!customerId,
   });
   const isRestricted = shopStatusData?.subscriptionStatus === 'expired' || shopStatusData?.subscriptionStatus === 'suspended';
@@ -247,6 +252,11 @@ export function CustomerDetail() {
     const main = mainProfiles.find((p: any) => p.isMain) ?? mainProfiles[0];
     if (main && selectedProfileId === null) setSelectedProfileId(main.id);
   }, [customer]);
+
+  // Reset show-all state when profile selection changes
+  React.useEffect(() => {
+    setShowAllMeasurements(false);
+  }, [selectedProfileId]);
 
   if (isLoading) return <div className="flex justify-center p-12"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
   if (!customer) return <div>{t('customerNotFound')}</div>;

@@ -1,5 +1,5 @@
 import { Router, type IRouter, type RequestHandler } from "express";
-import { db, customersTable, profilesTable, measurementsTable, shopsTable, invoicesTable } from "@workspace/db";
+import { db, customersTable, profilesTable, measurementsTable, measurementHistoryTable, shopsTable, invoicesTable } from "@workspace/db";
 import { eq, and, ilike, desc, count } from "drizzle-orm";
 import { CreateCustomerBody, UpdateCustomerBody, CreateProfileBody } from "@workspace/api-zod";
 import { requireAuth, requireShopRole, type AuthUser } from "../lib/auth";
@@ -165,33 +165,52 @@ router.get("/shop/customers/:customerId/activity", isShopUser, async (req, res):
     .where(and(eq(customersTable.shopId, user.shopId!), eq(customersTable.id, customerId)));
   if (!customer) { res.status(404).json({ error: "العميل غير موجود" }); return; }
 
-  // Measurement updates: profiles + measurements sorted by updatedAt desc
-  const profiles = await db.select({
-    profileId: profilesTable.id,
+  // Measurement history: filtered by profileId query param (if provided), sorted by savedAt desc
+  const profileIdFilter = req.query.profileId ? parseInt(req.query.profileId as string, 10) : null;
+
+  const historyWhere = profileIdFilter
+    ? and(
+        eq(measurementHistoryTable.shopId, user.shopId!),
+        eq(measurementHistoryTable.customerId, customerId),
+        eq(measurementHistoryTable.profileId, profileIdFilter)
+      )
+    : and(
+        eq(measurementHistoryTable.shopId, user.shopId!),
+        eq(measurementHistoryTable.customerId, customerId)
+      );
+
+  const [{ total: measurementTotal }] = await db
+    .select({ total: count() })
+    .from(measurementHistoryTable)
+    .where(historyWhere);
+
+  const historyRows = await db.select({
+    id: measurementHistoryTable.id,
+    profileId: measurementHistoryTable.profileId,
     profileName: profilesTable.name,
     isMain: profilesTable.isMain,
-    updatedAt: measurementsTable.updatedAt,
-    length: measurementsTable.length,
-    shoulder: measurementsTable.shoulder,
-    chest: measurementsTable.chest,
-    sleeve: measurementsTable.sleeve,
-    neck: measurementsTable.neck,
-    modelNotes: measurementsTable.modelNotes,
-    generalNotes: measurementsTable.generalNotes,
+    savedAt: measurementHistoryTable.savedAt,
+    length: measurementHistoryTable.length,
+    shoulder: measurementHistoryTable.shoulder,
+    chest: measurementHistoryTable.chest,
+    sleeve: measurementHistoryTable.sleeve,
+    neck: measurementHistoryTable.neck,
+    modelNotes: measurementHistoryTable.modelNotes,
+    generalNotes: measurementHistoryTable.generalNotes,
   })
-    .from(profilesTable)
-    .innerJoin(measurementsTable, eq(measurementsTable.profileId, profilesTable.id))
-    .where(and(eq(profilesTable.shopId, user.shopId!), eq(profilesTable.customerId, customerId)))
-    .orderBy(desc(measurementsTable.updatedAt));
+    .from(measurementHistoryTable)
+    .innerJoin(profilesTable, eq(profilesTable.id, measurementHistoryTable.profileId))
+    .where(historyWhere)
+    .orderBy(desc(measurementHistoryTable.savedAt));
 
-  const measurementTotal = profiles.length;
-  const measurementUpdates = profiles.map(p => ({
-    ...p,
-    length: p.length ? parseFloat(p.length) : null,
-    shoulder: p.shoulder ? parseFloat(p.shoulder) : null,
-    chest: p.chest ? parseFloat(p.chest) : null,
-    sleeve: p.sleeve ? parseFloat(p.sleeve) : null,
-    neck: p.neck ? parseFloat(p.neck) : null,
+  const measurementUpdates = historyRows.map(r => ({
+    ...r,
+    updatedAt: r.savedAt,
+    length: r.length ? parseFloat(r.length) : null,
+    shoulder: r.shoulder ? parseFloat(r.shoulder) : null,
+    chest: r.chest ? parseFloat(r.chest) : null,
+    sleeve: r.sleeve ? parseFloat(r.sleeve) : null,
+    neck: r.neck ? parseFloat(r.neck) : null,
   }));
 
   // Invoices: for this customer sorted by createdAt desc
@@ -370,31 +389,33 @@ router.put("/shop/measurements/:profileId", isShopUser, requireActiveShop, async
   const existing = await db.select().from(measurementsTable)
     .where(eq(measurementsTable.profileId, profileId));
 
+  const measurementValues = {
+    length: length?.toString(),
+    shoulder: shoulder?.toString(),
+    chest: chest?.toString(),
+    sleeve: sleeve?.toString(),
+    neck: neck?.toString(),
+    modelNotes,
+    generalNotes,
+  };
+
   let m;
   if (existing.length > 0) {
-    const [updated] = await db.update(measurementsTable).set({
-      length: length?.toString(),
-      shoulder: shoulder?.toString(),
-      chest: chest?.toString(),
-      sleeve: sleeve?.toString(),
-      neck: neck?.toString(),
-      modelNotes,
-      generalNotes,
-    }).where(eq(measurementsTable.profileId, profileId)).returning();
+    const [updated] = await db.update(measurementsTable).set(measurementValues)
+      .where(eq(measurementsTable.profileId, profileId)).returning();
     m = updated;
   } else {
-    const [created] = await db.insert(measurementsTable).values({
-      profileId,
-      length: length?.toString(),
-      shoulder: shoulder?.toString(),
-      chest: chest?.toString(),
-      sleeve: sleeve?.toString(),
-      neck: neck?.toString(),
-      modelNotes,
-      generalNotes,
-    }).returning();
+    const [created] = await db.insert(measurementsTable).values({ profileId, ...measurementValues }).returning();
     m = created;
   }
+
+  // Save a history record for every update
+  await db.insert(measurementHistoryTable).values({
+    profileId,
+    customerId: profile.customerId,
+    shopId: user.shopId!,
+    ...measurementValues,
+  });
 
   res.json({
     id: m.id,

@@ -3,6 +3,7 @@ export * from "./users";
 export * from "./customers";
 export * from "./profiles";
 export * from "./measurements";
+export * from "./measurement_history";
 export * from "./invoices";
 export * from "./suborders";
 export * from "./sessions";
