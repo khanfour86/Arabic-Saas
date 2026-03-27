@@ -213,11 +213,18 @@ export function CustomerDetail() {
   const [selectedProfileId, setSelectedProfileId] = React.useState<number | null>(null);
   const [measurementPopup, setMeasurementPopup] = React.useState<any | null>(null);
   const [showAllMeasurements, setShowAllMeasurements] = React.useState(false);
+  const [invoicePopupId, setInvoicePopupId] = React.useState<number | null>(null);
 
   const { data: shopStatusData } = useQuery({
     queryKey: ['/api/shop/status'],
     queryFn: () => fetch('/api/shop/status').then(r => r.ok ? r.json() : null),
     staleTime: 60000, retry: false,
+  });
+
+  const { data: invoicePopupData, isLoading: invoicePopupLoading } = useQuery({
+    queryKey: [`/api/shop/invoices/${invoicePopupId}`],
+    queryFn: () => fetch(`/api/shop/invoices/${invoicePopupId}`).then(r => r.ok ? r.json() : null),
+    enabled: !!invoicePopupId,
   });
 
   const { data: activityData } = useQuery({
@@ -518,6 +525,121 @@ export function CustomerDetail() {
         </DialogContent>
       </Dialog>
 
+      {/* Invoice detail popup */}
+      <Dialog open={!!invoicePopupId} onOpenChange={(open) => { if (!open) setInvoicePopupId(null); }}>
+        <DialogContent dir={dir} className="sm:max-w-lg rounded-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-display text-xl text-primary flex items-center gap-2">
+              <FileText className="w-5 h-5" />
+              {t('invoiceDetails')}
+            </DialogTitle>
+          </DialogHeader>
+
+          {invoicePopupLoading || !invoicePopupData ? (
+            <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
+          ) : (() => {
+            const inv = invoicePopupData;
+            const isDelivered = inv.status === 'delivered';
+            const isReady = !isDelivered && inv.allSubOrdersReady;
+            const badgeCls = isDelivered
+              ? 'bg-emerald-100 text-emerald-700'
+              : isReady
+              ? 'bg-blue-100 text-blue-700'
+              : 'bg-amber-100 text-amber-700';
+            const badgeLabel = isDelivered ? t('statusDeliveredFull') : isReady ? t('statusReadyDelivery') : t('statusUnder');
+
+            return (
+              <div className="space-y-4">
+                {/* Invoice header row */}
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <p className="text-lg font-bold">{t('invoiceNum')}{inv.invoiceNumber}</p>
+                  <span className={`text-xs font-bold px-3 py-1 rounded-full ${badgeCls}`}>{badgeLabel}</span>
+                </div>
+
+                {/* Dates */}
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="bg-muted/40 rounded-xl p-3">
+                    <p className="text-xs text-muted-foreground mb-0.5">{t('invoiceCreatedAt')}</p>
+                    <p className="font-semibold">{format(new Date(inv.createdAt), 'yyyy/MM/dd')}</p>
+                  </div>
+                  {inv.deliveredAt && (
+                    <div className="bg-emerald-50 rounded-xl p-3">
+                      <p className="text-xs text-muted-foreground mb-0.5">{t('invoiceDeliveredAt')}</p>
+                      <p className="font-semibold text-emerald-700">{format(new Date(inv.deliveredAt), 'yyyy/MM/dd')}</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Financial summary */}
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div className="bg-muted/40 rounded-xl p-3">
+                    <p className="text-xs text-muted-foreground mb-0.5">{t('invoiceTotalAmount')}</p>
+                    <p className="font-bold text-base">{inv.totalAmount} {t('kwd')}</p>
+                  </div>
+                  <div className="bg-emerald-50 rounded-xl p-3">
+                    <p className="text-xs text-muted-foreground mb-0.5">{t('invoicePaid')}</p>
+                    <p className="font-bold text-base text-emerald-700">{inv.paidAmount} {t('kwd')}</p>
+                  </div>
+                  <div className={`rounded-xl p-3 ${inv.remainingAmount > 0 ? 'bg-amber-50' : 'bg-muted/40'}`}>
+                    <p className="text-xs text-muted-foreground mb-0.5">{t('invoiceRemaining')}</p>
+                    <p className={`font-bold text-base ${inv.remainingAmount > 0 ? 'text-amber-700' : ''}`}>{inv.remainingAmount} {t('kwd')}</p>
+                  </div>
+                </div>
+
+                {/* Sub-orders */}
+                {inv.subOrders?.length > 0 && (
+                  <div className="space-y-2">
+                    {inv.subOrders.map((so: any) => {
+                      const soIsReady = so.status === 'ready';
+                      return (
+                        <div key={so.id} className="border border-border rounded-xl p-3 space-y-1.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-bold text-sm">{t('orderNum')}{so.subOrderNumber} — {so.profileName}</span>
+                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${soIsReady ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                              {soIsReady ? t('ready') : t('statusUnder')}
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                            <span>{t('qtyLabel')} {so.quantity}</span>
+                            <span>{t('fabricLabel')} {so.fabricSource === 'customer' ? t('fabricFromCustomer') : t('fabricFromShop')}</span>
+                            {so.fabricDescription && <span className="text-foreground/70">{so.fabricDescription}</span>}
+                          </div>
+                          <div className="flex gap-4 text-xs">
+                            <span>{t('invoiceTotalAmount')}: <strong>{so.price} {t('kwd')}</strong></span>
+                            <span>{t('invoicePaid')}: <strong>{so.paidAmount} {t('kwd')}</strong></span>
+                          </div>
+                          {so.notes && <p className="text-xs text-muted-foreground bg-muted/30 rounded-lg px-2 py-1">{so.notes}</p>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Invoice notes */}
+                {inv.notes && (
+                  <div className="bg-muted/30 rounded-xl p-3">
+                    <p className="text-xs text-muted-foreground mb-1">{t('notesLabel')}</p>
+                    <p className="text-sm">{inv.notes}</p>
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div className="flex flex-col gap-2 pt-1">
+                  <Link href={`/shop/invoices/${inv.id}`}>
+                    <Button variant="default" className="w-full rounded-xl gap-2" onClick={() => setInvoicePopupId(null)}>
+                      <FileText className="w-4 h-4" /> {t('viewInvoicePage')}
+                    </Button>
+                  </Link>
+                  <Button variant="outline" className="w-full rounded-xl gap-2" onClick={() => setInvoicePopupId(null)}>
+                    <X className="w-4 h-4" /> {t('closeDialog')}
+                  </Button>
+                </div>
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
+
       {/* Recent Invoices */}
       <div>
         <h2 className="text-2xl font-display font-bold text-primary flex items-center gap-2 mb-4">
@@ -546,7 +668,7 @@ export function CustomerDetail() {
                     : 'bg-amber-100 text-amber-700';
                   const badgeLabel = isDelivered ? t('statusDeliveredFull') : isReady ? t('statusReadyDelivery') : t('statusUnder');
                   return (
-                    <Link key={inv.id} href={`/shop/invoices/${inv.id}`}>
+                    <button key={inv.id} onClick={() => setInvoicePopupId(inv.id)} className="w-full text-start">
                       <div className="flex items-center gap-4 px-5 py-3 hover:bg-muted/30 transition-colors cursor-pointer">
                         <div className="w-9 h-9 rounded-xl bg-accent/10 flex items-center justify-center shrink-0">
                           <FileText className="w-4 h-4 text-accent-foreground" />
@@ -558,7 +680,7 @@ export function CustomerDetail() {
                         <span className={`text-xs font-bold px-2.5 py-1 rounded-full shrink-0 ${badgeCls}`}>{badgeLabel}</span>
                         <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
                       </div>
-                    </Link>
+                    </button>
                   );
                 })}
                 {activityData.invoiceTotal > 5 && (
