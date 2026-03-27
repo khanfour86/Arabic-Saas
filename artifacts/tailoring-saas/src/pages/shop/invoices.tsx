@@ -1,15 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { toEnglishDigits } from '@/lib/digits';
-import { useListInvoices, useGetInvoice, useMarkInvoiceDelivered, useGetWhatsappMessage, useGetCustomer, ListInvoicesStatus } from '@workspace/api-client-react';
+import { useListInvoices, useGetInvoice, useMarkInvoiceDelivered, useGetWhatsappMessage, ListInvoicesStatus } from '@workspace/api-client-react';
 import { useTranslation } from '@/lib/i18n';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Textarea } from '@/components/ui/textarea';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Loader2, FileText, CheckCircle, MessageCircle, ChevronLeft, ChevronRight, Calendar, Scissors, Plus, X } from 'lucide-react';
+import { Search, Loader2, FileText, CheckCircle, MessageCircle, ChevronLeft, ChevronRight, Calendar, Scissors, Plus } from 'lucide-react';
 import { Link, useLocation, useParams, useSearch } from 'wouter';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
@@ -140,288 +137,6 @@ export function InvoicesList() {
   );
 }
 
-function AddEditOrdersDialog({ inv, open, onClose }: { inv: any; open: boolean; onClose: () => void }) {
-  const { t, dir } = useTranslation();
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-
-  // Editable copies of existing sub-orders
-  const [editedOrders, setEditedOrders] = useState<Record<number, any>>({});
-  // New sub-order form
-  const emptyNew = { profileId: 0, quantity: 1, fabricSource: 'shop_fabric', fabricDescription: '', price: '', paidAmount: '', notes: '' };
-  const [newOrder, setNewOrder] = useState(emptyNew);
-  const [saving, setSaving] = useState(false);
-
-  // Fetch customer profiles for the new order profile selector
-  const { data: customer } = useGetCustomer(inv.customerId);
-
-  // Initialize editable copies when dialog opens
-  useEffect(() => {
-    if (open && inv?.subOrders) {
-      const map: Record<number, any> = {};
-      inv.subOrders.forEach((so: any) => {
-        map[so.id] = {
-          quantity: so.quantity,
-          fabricSource: so.fabricSource,
-          fabricDescription: so.fabricDescription || '',
-          price: String(so.price),
-          paidAmount: String(so.paidAmount),
-          notes: so.notes || '',
-        };
-      });
-      setEditedOrders(map);
-      setNewOrder(emptyNew);
-    }
-  }, [open, inv]);
-
-  const setField = (soId: number, field: string, val: any) => {
-    setEditedOrders(prev => ({ ...prev, [soId]: { ...prev[soId], [field]: val } }));
-  };
-
-  const hasNewOrder = newOrder.profileId > 0;
-
-  const handleSave = async () => {
-    if (hasNewOrder) {
-      if (!newOrder.quantity || Number(newOrder.quantity) <= 0) {
-        toast({ title: t('error'), description: t('mustEnterQtyNew'), variant: 'destructive' }); return;
-      }
-      if (!newOrder.price || Number(newOrder.price) <= 0) {
-        toast({ title: t('error'), description: t('mustEnterPriceNew'), variant: 'destructive' }); return;
-      }
-    }
-
-    setSaving(true);
-    try {
-      // PATCH each existing sub-order
-      await Promise.all(
-        inv.subOrders.map((so: any) => {
-          const ed = editedOrders[so.id];
-          if (!ed) return Promise.resolve();
-          return fetch(`/api/shop/suborders/${so.id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              quantity: Number(ed.quantity),
-              fabricSource: ed.fabricSource,
-              fabricDescription: ed.fabricDescription || null,
-              price: Number(ed.price),
-              paidAmount: Number(ed.paidAmount),
-              notes: ed.notes || null,
-            }),
-          });
-        })
-      );
-
-      // POST new sub-order if filled
-      if (hasNewOrder) {
-        await fetch('/api/shop/suborders', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            invoiceId: inv.id,
-            profileId: Number(newOrder.profileId),
-            quantity: Number(newOrder.quantity),
-            fabricSource: newOrder.fabricSource,
-            fabricDescription: newOrder.fabricDescription || null,
-            price: Number(newOrder.price),
-            paidAmount: Number(newOrder.paidAmount) || 0,
-            notes: newOrder.notes || null,
-          }),
-        });
-        toast({ title: t('subOrderAdded') });
-      } else {
-        toast({ title: t('ordersUpdated') });
-      }
-
-      queryClient.invalidateQueries({ queryKey: [`/api/shop/invoices/${inv.id}`] });
-      queryClient.invalidateQueries({ queryKey: ['/api/shop/invoices'] });
-      onClose();
-    } catch {
-      toast({ title: t('error'), variant: 'destructive' });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const mainProfiles = customer?.profiles?.filter((p: any) => !p.isProof) ?? [];
-
-  return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent dir={dir} className="sm:max-w-2xl rounded-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="font-display text-xl text-primary flex items-center gap-2">
-            <Plus className="w-5 h-5" /> {t('addEditOrders')} — #{inv.invoiceNumber}
-          </DialogTitle>
-        </DialogHeader>
-
-        <div className="space-y-6 mt-2">
-          {/* Existing sub-orders */}
-          {inv.subOrders?.length > 0 && (
-            <div>
-              <h3 className="font-bold text-sm text-muted-foreground mb-3 uppercase tracking-wide">{t('currentOrders')}</h3>
-              <div className="space-y-4">
-                {inv.subOrders.map((so: any) => {
-                  const ed = editedOrders[so.id] ?? {};
-                  return (
-                    <div key={so.id} className="border border-border rounded-2xl p-4 space-y-3 bg-muted/20">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-bold text-sm text-primary">{so.profileName}</span>
-                        <span className="text-xs text-muted-foreground">({so.subOrderNumber})</span>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="text-xs text-muted-foreground mb-1 block">{t('qty')}</label>
-                          <Input
-                            type="number" min={1}
-                            value={ed.quantity ?? so.quantity}
-                            onChange={e => setField(so.id, 'quantity', e.target.value)}
-                            className="h-9 rounded-xl bg-background"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs text-muted-foreground mb-1 block">{t('fabricSource')}</label>
-                          <Select value={ed.fabricSource ?? so.fabricSource} onValueChange={v => setField(so.id, 'fabricSource', v)}>
-                            <SelectTrigger className="h-9 rounded-xl bg-background"><SelectValue /></SelectTrigger>
-                            <SelectContent className="bg-gray-900 text-white">
-                              <SelectItem value="shop_fabric">{t('shopFabric')}</SelectItem>
-                              <SelectItem value="customer_fabric">{t('customerFabric')}</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div>
-                          <label className="text-xs text-muted-foreground mb-1 block">{t('priceLabel')} ({t('kwd')})</label>
-                          <Input
-                            type="number" min={0} step="0.001"
-                            value={ed.price ?? so.price}
-                            onChange={e => setField(so.id, 'price', e.target.value)}
-                            className="h-9 rounded-xl bg-background"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs text-muted-foreground mb-1 block">{t('paidLabel')} ({t('kwd')})</label>
-                          <Input
-                            type="number" min={0} step="0.001"
-                            value={ed.paidAmount ?? so.paidAmount}
-                            onChange={e => setField(so.id, 'paidAmount', e.target.value)}
-                            className="h-9 rounded-xl bg-background"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-xs text-muted-foreground mb-1 block">{t('fabricDetails')}</label>
-                        <Input
-                          placeholder={t('fabricDescPlaceholder')}
-                          value={ed.fabricDescription ?? so.fabricDescription ?? ''}
-                          onChange={e => setField(so.id, 'fabricDescription', e.target.value)}
-                          className="h-9 rounded-xl bg-background"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs text-muted-foreground mb-1 block">{t('notesLabel')}</label>
-                        <Textarea
-                          placeholder={t('notesPlaceholder')}
-                          value={ed.notes ?? so.notes ?? ''}
-                          onChange={e => setField(so.id, 'notes', e.target.value)}
-                          className="rounded-xl bg-background min-h-[60px]"
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* New sub-order section */}
-          <div>
-            <h3 className="font-bold text-sm text-muted-foreground mb-3 uppercase tracking-wide">{t('addNewOrder')}</h3>
-            <div className="border-2 border-dashed border-primary/30 rounded-2xl p-4 space-y-3 bg-primary/5">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="col-span-2">
-                  <label className="text-xs text-muted-foreground mb-1 block">{t('profileLabel')}</label>
-                  <Select value={String(newOrder.profileId || '')} onValueChange={v => setNewOrder(p => ({ ...p, profileId: Number(v) }))}>
-                    <SelectTrigger className="h-9 rounded-xl bg-background"><SelectValue placeholder={t('choosePerson')} /></SelectTrigger>
-                    <SelectContent className="bg-gray-900 text-white">
-                      {mainProfiles.map((pr: any) => (
-                        <SelectItem key={pr.id} value={String(pr.id)}>{pr.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">{t('qty')}</label>
-                  <Input
-                    type="number" min={1}
-                    value={newOrder.quantity}
-                    onChange={e => setNewOrder(p => ({ ...p, quantity: Number(e.target.value) }))}
-                    className="h-9 rounded-xl bg-background"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">{t('fabricSource')}</label>
-                  <Select value={newOrder.fabricSource} onValueChange={v => setNewOrder(p => ({ ...p, fabricSource: v }))}>
-                    <SelectTrigger className="h-9 rounded-xl bg-background"><SelectValue /></SelectTrigger>
-                    <SelectContent className="bg-gray-900 text-white">
-                      <SelectItem value="shop_fabric">{t('shopFabric')}</SelectItem>
-                      <SelectItem value="customer_fabric">{t('customerFabric')}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">{t('priceLabel')} ({t('kwd')})</label>
-                  <Input
-                    type="number" min={0} step="0.001"
-                    value={newOrder.price}
-                    onChange={e => setNewOrder(p => ({ ...p, price: e.target.value }))}
-                    className="h-9 rounded-xl bg-background"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">{t('paidLabel')} ({t('kwd')})</label>
-                  <Input
-                    type="number" min={0} step="0.001"
-                    value={newOrder.paidAmount}
-                    onChange={e => setNewOrder(p => ({ ...p, paidAmount: e.target.value }))}
-                    className="h-9 rounded-xl bg-background"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground mb-1 block">{t('fabricDetails')}</label>
-                <Input
-                  placeholder={t('fabricDescPlaceholder')}
-                  value={newOrder.fabricDescription}
-                  onChange={e => setNewOrder(p => ({ ...p, fabricDescription: e.target.value }))}
-                  className="h-9 rounded-xl bg-background"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground mb-1 block">{t('notesLabel')}</label>
-                <Textarea
-                  placeholder={t('notesPlaceholder')}
-                  value={newOrder.notes}
-                  onChange={e => setNewOrder(p => ({ ...p, notes: e.target.value }))}
-                  className="rounded-xl bg-background min-h-[60px]"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Footer actions */}
-          <div className="flex gap-3 pt-1">
-            <Button className="flex-1 h-12 rounded-xl" onClick={handleSave} disabled={saving}>
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <>{t('saveAllChanges')}</>}
-            </Button>
-            <Button variant="outline" className="h-12 rounded-xl px-6" onClick={onClose} disabled={saving}>
-              <X className="w-4 h-4" />
-            </Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 export function InvoiceDetail() {
   const params = useParams();
   const invoiceId = parseInt(params.id || '0');
@@ -430,7 +145,7 @@ export function InvoiceDetail() {
   const { toast } = useToast();
   const { t, dir } = useTranslation();
   const { user } = useAuth();
-  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [, setLocation] = useLocation();
 
   const canEdit = user?.role === 'shop_manager' || user?.role === 'reception';
 
@@ -554,7 +269,7 @@ export function InvoiceDetail() {
                   <Button
                     variant="outline"
                     className="rounded-xl h-14 flex-1 md:flex-none border-primary/30 text-primary hover:bg-primary/5 font-bold gap-2"
-                    onClick={() => setShowEditDialog(true)}
+                    onClick={() => setLocation(`/shop/invoices/${invoiceId}/edit`)}
                   >
                     <Plus className="w-5 h-5" /> {t('addEditOrders')}
                   </Button>
@@ -588,13 +303,6 @@ export function InvoiceDetail() {
         </CardContent>
       </Card>
 
-      {inv && (
-        <AddEditOrdersDialog
-          inv={inv}
-          open={showEditDialog}
-          onClose={() => setShowEditDialog(false)}
-        />
-      )}
     </div>
   );
 }

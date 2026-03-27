@@ -13,6 +13,7 @@ import { CustomersList } from "./pages/shop/customers";
 import { CustomerDetail } from "./pages/shop/customer-detail";
 import { InvoicesList, InvoiceDetail } from "./pages/shop/invoices";
 import { InvoiceCreate } from "./pages/shop/invoice-create";
+import { InvoiceEdit } from "./pages/shop/invoice-edit";
 import { TailorQueue } from "./pages/shop/tailor-queue";
 import { ShopSettings } from "./pages/shop/settings";
 import { Loader2 } from "lucide-react";
@@ -85,6 +86,7 @@ function AppContent() {
             {/* Invoices */}
             <Route path="/shop/invoices" component={InvoicesList} />
             <Route path="/shop/invoices/new" component={InvoiceCreate} />
+            <Route path="/shop/invoices/:id/edit" component={InvoiceEdit} />
             <Route path="/shop/invoices/:id" component={InvoiceDetail} />
             
             {/* Tailor */}
