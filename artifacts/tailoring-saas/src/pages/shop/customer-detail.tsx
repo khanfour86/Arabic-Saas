@@ -250,6 +250,12 @@ export function CustomerDetail() {
   if (isLoading) return <div className="flex justify-center p-12"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
   if (!customer) return <div>{t('customerNotFound')}</div>;
 
+  const filteredMeasurements = activityData
+    ? (selectedProfileId
+        ? activityData.measurementUpdates?.filter((u: any) => u.profileId === selectedProfileId)
+        : activityData.measurementUpdates)
+    : null;
+
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Header Card */}
@@ -380,16 +386,16 @@ export function CustomerDetail() {
         </h2>
         <Card className="border-0 shadow-lg rounded-2xl overflow-hidden">
           <CardContent className="p-0">
-            {!activityData ? (
+            {!filteredMeasurements ? (
               <div className="flex justify-center p-6"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
-            ) : activityData.measurementUpdates?.length === 0 ? (
+            ) : filteredMeasurements.length === 0 ? (
               <div className="flex flex-col items-center gap-2 p-8 text-muted-foreground">
                 <Ruler className="w-6 h-6 opacity-40" />
                 <p className="text-sm">{t('noMeasurementUpdates')}</p>
               </div>
             ) : (
               <div className="divide-y divide-border">
-                {activityData.measurementUpdates?.map((u: any) => (
+                {filteredMeasurements.map((u: any) => (
                   <button
                     key={u.profileId}
                     onClick={() => setMeasurementPopup(u)}
@@ -415,14 +421,6 @@ export function CustomerDetail() {
                     <span className="text-xs text-muted-foreground shrink-0">{format(new Date(u.updatedAt), 'yyyy/MM/dd')}</span>
                   </button>
                 ))}
-                {activityData.measurementTotal > 5 && (
-                  <Link href={`/shop/customers/${customer.id}`}>
-                    <button className="w-full flex items-center justify-center gap-1.5 py-3 text-sm text-primary font-bold hover:bg-muted/30 transition-colors">
-                      {t('showMore')} ({activityData.measurementTotal - 5})
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
-                  </Link>
-                )}
               </div>
             )}
           </CardContent>
