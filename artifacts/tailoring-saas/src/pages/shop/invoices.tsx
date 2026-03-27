@@ -152,7 +152,7 @@ export function InvoiceDetail() {
 
   const { data: history } = useQuery<any[]>({
     queryKey: [`/api/shop/invoices/${invoiceId}/history`],
-    queryFn: () => fetch(`/api/shop/invoices/${invoiceId}/history`).then(r => r.json()),
+    queryFn: () => fetch(`/api/shop/invoices/${invoiceId}/history`).then(r => r.ok ? r.json() : []),
     enabled: !!invoiceId,
   });
 
@@ -342,7 +342,7 @@ function InvoiceHistorySection({ history, t, dir }: { history: any[]; t: Functio
 
   const fmtKwd = (val: number) => `${val.toFixed(3)} ${t('kwd')}`;
 
-  if (history.length === 0) return null;
+  if (!Array.isArray(history) || history.length === 0) return null;
 
   const dialogChanges = selectedEntry ? (selectedEntry.changes ?? []).filter((c: any) => c.type !== 'summary') : [];
   const dialogSummary = selectedEntry ? (selectedEntry.changes ?? []).find((c: any) => c.type === 'summary') : null;
