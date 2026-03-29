@@ -46,15 +46,17 @@ Tables in PostgreSQL:
 - `customers` — shop customers (linked to shopId)
 - `profiles` — measurement profiles per customer (a customer can have multiple, one is main)
 - `measurements` — body measurements per profile (length, shoulder, chest, sleeve, neck + notes)
+- `measurement_history` — historical snapshots of measurements saved before each update
 - `invoices` — orders (linked to shop + customer, has status: under_tailoring/ready/delivered)
+- `invoice_history` — audit log of invoice edits (stored as JSON diff per edit)
 - `sub_orders` — individual garment items per invoice (with fabric info, price, paid amount, status)
 
 ## Authentication
 
-- In-memory session Map (cleared on server restart)
+- Sessions stored in PostgreSQL `sessions` table (token, userId, userData, expiresAt — 30 day TTL)
 - SHA256 password hashing with salt "tailoring_salt_2024"
 - Token stored in localStorage as `auth_token`
-- `window.fetch` override in App.tsx injects Bearer token from localStorage on every API call
+- `window.fetch` override in App.tsx injects Bearer token on every API call (also handled by custom-fetch.ts)
 - Demo credentials:
   - `owner` / `owner123` (platform owner)
   - `manager1` / `manager123` (shop manager)

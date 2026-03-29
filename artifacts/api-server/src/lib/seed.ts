@@ -46,7 +46,7 @@ export async function seedDatabase(): Promise<void> {
       },
       {
         username: "reception1",
-        passwordHash: hashPassword("manager123"),
+        passwordHash: hashPassword("reception123"),
         name: "فاطمة العنزي",
         role: "reception",
         shopId: demoShop.id,
