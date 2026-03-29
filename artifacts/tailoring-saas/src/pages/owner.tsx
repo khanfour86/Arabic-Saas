@@ -185,6 +185,11 @@ export function OwnerShops() {
                       {format(new Date(shop.subscriptionEnd), 'yyyy/MM/dd')}
                     </div>
                   </div>
+                  {(shop as any).plan === 'light' && (
+                    <Badge variant="outline" className="px-3 py-1 rounded-full text-xs border-0 bg-sky-100 text-sky-700">
+                      ☁ {t('planLight')}
+                    </Badge>
+                  )}
                   <Badge variant="outline" className={`px-3 py-1 rounded-full text-xs border-0 ${
                     shop.subscriptionStatus === 'active' ? 'bg-emerald-100 text-emerald-700' :
                     shop.subscriptionStatus === 'expired' ? 'bg-red-100 text-red-700' :
@@ -275,6 +280,7 @@ function ShopCreateForm({ onSuccess }: { onSuccess: () => void }) {
   const [managerPassword, setManagerPassword] = useState('');
   const [subscriptionStart, setSubscriptionStart] = useState(today);
   const [durationMonths, setDurationMonths] = useState(12);
+  const [plan, setPlan] = useState<'light' | 'premium'>('premium');
 
   const DURATION_OPTIONS = [
     { label: t('duration3'), months: 3 },
@@ -327,6 +333,7 @@ function ShopCreateForm({ onSuccess }: { onSuccess: () => void }) {
         subscriptionStatus: 'active',
         managerUsername,
         managerPassword,
+        plan,
       }
     });
   };
@@ -419,6 +426,27 @@ function ShopCreateForm({ onSuccess }: { onSuccess: () => void }) {
               {t('subscriptionEnd')} <span className="font-bold text-foreground" dir="ltr">{subscriptionEnd}</span>
             </p>
           )}
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <label className="text-sm font-bold">{t('planLabel')}</label>
+        <div className="grid grid-cols-2 gap-2">
+          {(['premium', 'light'] as const).map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => setPlan(p)}
+              className={`h-auto py-3 px-4 rounded-xl text-sm font-bold border-2 transition-all text-start ${
+                plan === p
+                  ? 'border-primary bg-primary text-white shadow-md'
+                  : 'border-muted bg-muted/50 text-foreground hover:border-primary/40'
+              }`}
+            >
+              <div className="font-bold">{p === 'premium' ? `⭐ ${t('planPremium')}` : `☁ ${t('planLight')}`}</div>
+              <div className="text-xs mt-0.5 opacity-80">{p === 'premium' ? t('planPremiumDesc') : t('planLightDesc')}</div>
+            </button>
+          ))}
         </div>
       </div>
 
@@ -608,6 +636,7 @@ function ShopEditDialog({ shop }: { shop: any }) {
         subscriptionStart: fd.get('subscriptionStart') as string,
         subscriptionEnd: fd.get('subscriptionEnd') as string,
         subscriptionStatus: fd.get('subscriptionStatus') as any,
+        plan: fd.get('plan') as string,
         notes: fd.get('notes') as string || undefined,
       }
     });
@@ -664,7 +693,7 @@ function ShopEditDialog({ shop }: { shop: any }) {
                   <label className="text-sm font-bold">{t('subscriptionEnd')}</label>
                   <Input type="date" name="subscriptionEnd" defaultValue={shop.subscriptionEnd?.split('T')[0]} required className="bg-muted/50 rounded-xl" />
                 </div>
-                <div className="space-y-1.5 md:col-span-2">
+                <div className="space-y-1.5">
                   <label className="text-sm font-bold">{t('filterActive')}/{t('filterExpired')}/{t('filterSuspended')}</label>
                   <Select name="subscriptionStatus" defaultValue={shop.subscriptionStatus}>
                     <SelectTrigger className="bg-muted/50 rounded-xl" dir={dir}>
@@ -674,6 +703,18 @@ function ShopEditDialog({ shop }: { shop: any }) {
                       <SelectItem value="active">{t('filterActive')}</SelectItem>
                       <SelectItem value="expired">{t('filterExpired')}</SelectItem>
                       <SelectItem value="suspended">{t('filterSuspended')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-bold">{t('planLabel')}</label>
+                  <Select name="plan" defaultValue={(shop as any).plan ?? 'premium'} dir={dir}>
+                    <SelectTrigger className="bg-muted/50 rounded-xl" dir={dir}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent dir={dir}>
+                      <SelectItem value="premium">⭐ {t('planPremium')}</SelectItem>
+                      <SelectItem value="light">☁ {t('planLight')}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

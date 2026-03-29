@@ -24,4 +24,5 @@ export interface UpdateShopBody {
   subscriptionStatus?: UpdateShopBodySubscriptionStatus;
   /** @nullable */
   notes?: string | null;
+  plan?: string;
 }

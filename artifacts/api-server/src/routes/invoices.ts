@@ -69,6 +69,8 @@ async function buildInvoiceResponse(shopId: number, invoice: any) {
     paidAmount,
     remainingAmount: totalAmount - paidAmount,
     notes: invoice.notes,
+    bookNumber: invoice.bookNumber ?? null,
+    pageNumber: invoice.pageNumber ?? null,
     allSubOrdersReady: invoice.allSubOrdersReady,
     createdAt: invoice.createdAt,
     deliveredAt: invoice.deliveredAt,
@@ -84,15 +86,19 @@ async function generateInvoiceNumber(shopId: number): Promise<string> {
 
 router.get("/shop/invoices", isShopUser, async (req, res): Promise<void> => {
   const user = (req as any).user as AuthUser;
-  const { status, phone, invoiceNumber, readyForDelivery } = req.query as any;
+  const { status, phone, invoiceNumber, readyForDelivery, customerId } = req.query as any;
   const cleanStatus = status && status !== "null" && status !== "undefined" ? status : undefined;
   const cleanPhone = phone && phone !== "null" && phone !== "undefined" ? phone : undefined;
   const cleanInvoiceNumber = invoiceNumber && invoiceNumber !== "null" && invoiceNumber !== "undefined" ? invoiceNumber : undefined;
+  const cleanCustomerId = customerId && customerId !== "null" && customerId !== "undefined" ? parseInt(customerId, 10) : undefined;
 
   let allInvoices = await db.select().from(invoicesTable)
     .where(eq(invoicesTable.shopId, user.shopId!))
     .orderBy(desc(invoicesTable.createdAt));
 
+  if (cleanCustomerId) {
+    allInvoices = allInvoices.filter(i => i.customerId === cleanCustomerId);
+  }
   if (cleanStatus) {
     allInvoices = allInvoices.filter(i => i.status === cleanStatus);
   }
@@ -103,8 +109,6 @@ router.get("/shop/invoices", isShopUser, async (req, res): Promise<void> => {
   const invoices = [];
   for (const inv of allInvoices) {
     const [customer] = await db.select().from(customersTable).where(eq(customersTable.id, inv.customerId));
-    // When both phone and invoiceNumber arrive together (OR search from the UI)
-    // show the invoice if it matches either; otherwise apply each filter independently
     if (cleanPhone && cleanInvoiceNumber) {
       const phoneMatch = customer?.phone.includes(cleanPhone) ?? false;
       const invoiceMatch = inv.invoiceNumber.includes(cleanInvoiceNumber);
@@ -130,6 +134,8 @@ router.get("/shop/invoices", isShopUser, async (req, res): Promise<void> => {
       paidAmount,
       remainingAmount: totalAmount - paidAmount,
       notes: inv.notes,
+      bookNumber: inv.bookNumber ?? null,
+      pageNumber: inv.pageNumber ?? null,
       allSubOrdersReady: inv.allSubOrdersReady,
       createdAt: inv.createdAt,
       deliveredAt: inv.deliveredAt,
@@ -141,22 +147,10 @@ router.get("/shop/invoices", isShopUser, async (req, res): Promise<void> => {
 
 router.post("/shop/invoices", isManagerOrReception, requireActiveShop, async (req, res): Promise<void> => {
   const user = (req as any).user as AuthUser;
-  const { customerId, notes, subOrders } = req.body;
+  const { customerId, notes, subOrders, bookNumber, pageNumber, quantity, price, paidAmount } = req.body;
 
-  if (!customerId || !subOrders || subOrders.length === 0) {
+  if (!customerId) {
     res.status(400).json({ error: "بيانات الفاتورة غير مكتملة" });
-    return;
-  }
-
-  // السعر الإجمالي والمبلغ المدفوع يُدخلان فقط في الطلب الأول
-  const firstPrice = parseFloat(subOrders[0].price) || 0;
-  const firstPaid = parseFloat(subOrders[0].paidAmount) || 0;
-  if (firstPrice <= 0) {
-    res.status(400).json({ error: "يجب إدخال السعر الإجمالي للفاتورة" });
-    return;
-  }
-  if (firstPaid > firstPrice) {
-    res.status(400).json({ error: "المبلغ المدفوع لا يمكن أن يتجاوز السعر الإجمالي" });
     return;
   }
 
@@ -165,6 +159,79 @@ router.post("/shop/invoices", isManagerOrReception, requireActiveShop, async (re
 
   if (!customer) {
     res.status(404).json({ error: "العميل غير موجود" });
+    return;
+  }
+
+  const isLightPlan = !subOrders || subOrders.length === 0;
+
+  if (isLightPlan) {
+    // Light plan invoice creation
+    const firstPrice = parseFloat(price) || 0;
+    const firstPaid = parseFloat(paidAmount) || 0;
+    if (firstPrice <= 0) {
+      res.status(400).json({ error: "يجب إدخال السعر الإجمالي للفاتورة" });
+      return;
+    }
+    if (firstPaid > firstPrice) {
+      res.status(400).json({ error: "المبلغ المدفوع لا يمكن أن يتجاوز السعر الإجمالي" });
+      return;
+    }
+    if (!quantity || parseInt(quantity, 10) <= 0) {
+      res.status(400).json({ error: "يجب إدخال الكمية" });
+      return;
+    }
+
+    // Find main profile for this customer
+    const [mainProfile] = await db.select().from(profilesTable)
+      .where(and(eq(profilesTable.shopId, user.shopId!), eq(profilesTable.customerId, customerId), eq(profilesTable.isMain, true)));
+
+    if (!mainProfile) {
+      res.status(400).json({ error: "لم يتم العثور على ملف العميل الرئيسي" });
+      return;
+    }
+
+    const invoiceNumber = await generateInvoiceNumber(user.shopId!);
+
+    const [invoice] = await db.insert(invoicesTable).values({
+      shopId: user.shopId!,
+      customerId,
+      invoiceNumber,
+      status: "under_tailoring",
+      notes: notes ?? null,
+      bookNumber: bookNumber ? bookNumber.toString() : null,
+      pageNumber: pageNumber ? pageNumber.toString() : null,
+      allSubOrdersReady: false,
+    }).returning();
+
+    const subOrderNumber = `${invoiceNumber}-1`;
+    await db.insert(subOrdersTable).values({
+      invoiceId: invoice.id,
+      shopId: user.shopId!,
+      profileId: mainProfile.id,
+      subOrderNumber,
+      quantity: parseInt(quantity, 10),
+      fabricSource: "shop_fabric",
+      fabricDescription: null,
+      price: firstPrice.toString(),
+      paidAmount: firstPaid.toString(),
+      notes: null,
+      status: "under_tailoring",
+    });
+
+    const result = await buildInvoiceResponse(user.shopId!, invoice);
+    res.status(201).json(result);
+    return;
+  }
+
+  // Premium plan invoice creation
+  const firstPrice = parseFloat(subOrders[0].price) || 0;
+  const firstPaid = parseFloat(subOrders[0].paidAmount) || 0;
+  if (firstPrice <= 0) {
+    res.status(400).json({ error: "يجب إدخال السعر الإجمالي للفاتورة" });
+    return;
+  }
+  if (firstPaid > firstPrice) {
+    res.status(400).json({ error: "المبلغ المدفوع لا يمكن أن يتجاوز السعر الإجمالي" });
     return;
   }
 
@@ -221,8 +288,13 @@ router.patch("/shop/invoices/:invoiceId", isManagerOrReception, requireActiveSho
   const user = (req as any).user as AuthUser;
   const id = parseInt(Array.isArray(req.params.invoiceId) ? req.params.invoiceId[0] : req.params.invoiceId, 10);
 
+  const updateData: Record<string, any> = {};
+  if (req.body.notes !== undefined) updateData.notes = req.body.notes;
+  if (req.body.bookNumber !== undefined) updateData.bookNumber = req.body.bookNumber || null;
+  if (req.body.pageNumber !== undefined) updateData.pageNumber = req.body.pageNumber || null;
+
   const [invoice] = await db.update(invoicesTable)
-    .set({ notes: req.body.notes })
+    .set(updateData)
     .where(and(eq(invoicesTable.shopId, user.shopId!), eq(invoicesTable.id, id)))
     .returning();
 
@@ -293,11 +365,13 @@ router.get("/shop/invoices/:invoiceId/whatsapp", isManagerOrReception, async (re
   const shopName = shop?.name ?? "محلنا";
   const phone = customer?.phone ?? "";
 
+  const bookRef = invoice.bookNumber ? `\nدفتر: ${invoice.bookNumber}${invoice.pageNumber ? ' / صفحة: ' + invoice.pageNumber : ''}` : '';
+
   const message =
 `السلام عليكم ${customerName} 🌿
 خياطة ${shopName}
 
-طلبك جاهز للاستلام ✅
+طلبك جاهز للاستلام ✅${bookRef}
 الكمية: ${totalQty} دشداشة
 الإجمالي: ${totalAmount.toFixed(3)} د.ك
 المدفوع: ${paidAmount.toFixed(3)} د.ك

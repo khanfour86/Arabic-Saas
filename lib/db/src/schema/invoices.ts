@@ -12,6 +12,8 @@ export const invoicesTable = pgTable("invoices", {
   status: text("status").notNull().default("under_tailoring"),
   notes: text("notes"),
   allSubOrdersReady: boolean("all_sub_orders_ready").notNull().default(false),
+  bookNumber: text("book_number"),
+  pageNumber: text("page_number"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   deliveredAt: timestamp("delivered_at", { withTimezone: true }),
 });

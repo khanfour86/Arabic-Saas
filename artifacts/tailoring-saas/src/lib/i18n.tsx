@@ -302,6 +302,24 @@ const translations = {
     fabricFromShop: 'قماش المحل',
     orderNum: 'طلب #',
     noNotes: 'لا توجد ملاحظات',
+    // Plan
+    planLabel: 'فئة الاشتراك',
+    planLight: 'خفيف',
+    planPremium: 'مميز',
+    planLightDesc: 'بدون مقاسات — مع رقم الدفتر والصفحة',
+    planPremiumDesc: 'النظام الكامل مع المقاسات',
+    // Light Plan Invoice
+    bookNumberLabel: 'رقم الدفتر',
+    pageNumberLabel: 'رقم الصفحة / الفاتورة',
+    enterBookNumber: 'أدخل رقم الدفتر...',
+    enterPageNumber: 'أدخل رقم الصفحة...',
+    mustEnterBookNumber: 'يجب إدخال رقم الدفتر',
+    // Light Plan Customer
+    lightInvoiceHistory: 'سجل الفواتير السابقة',
+    lightNoInvoices: 'لا توجد فواتير سابقة لهذا العميل',
+    saveContinueLight: 'حفظ العميل',
+    lightBookRef: 'دفتر',
+    lightPageRef: 'صفحة',
     // Common
     error: 'خطأ',
     kwd: 'د.ك',
@@ -606,6 +624,24 @@ const translations = {
     fabricFromShop: 'Shop Fabric',
     orderNum: 'Order #',
     noNotes: 'No notes',
+    // Plan
+    planLabel: 'Subscription Plan',
+    planLight: 'Light',
+    planPremium: 'Premium',
+    planLightDesc: 'No measurements — book & page number based',
+    planPremiumDesc: 'Full system with measurements',
+    // Light Plan Invoice
+    bookNumberLabel: 'Book Number',
+    pageNumberLabel: 'Page / Invoice Number',
+    enterBookNumber: 'Enter book number...',
+    enterPageNumber: 'Enter page number...',
+    mustEnterBookNumber: 'Book number is required',
+    // Light Plan Customer
+    lightInvoiceHistory: 'Previous Invoices',
+    lightNoInvoices: 'No previous invoices for this customer',
+    saveContinueLight: 'Save Customer',
+    lightBookRef: 'Book',
+    lightPageRef: 'Page',
     // Common
     error: 'Error',
     kwd: 'KD',

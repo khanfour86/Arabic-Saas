@@ -11,6 +11,7 @@ export const shopsTable = pgTable("shops", {
   subscriptionStart: date("subscription_start").notNull(),
   subscriptionEnd: date("subscription_end").notNull(),
   subscriptionStatus: text("subscription_status").notNull().default("active"),
+  plan: text("plan").notNull().default("premium"),
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

@@ -63,6 +63,8 @@ router.post("/owner/shops", requireAuth, requireOwner, async (req, res): Promise
     return;
   }
 
+  const plan = (req.body.plan === 'light' || req.body.plan === 'premium') ? req.body.plan : 'premium';
+
   const [shop] = await db.insert(shopsTable).values({
     name: shopData.name,
     managerName: shopData.managerName,
@@ -71,6 +73,7 @@ router.post("/owner/shops", requireAuth, requireOwner, async (req, res): Promise
     subscriptionStart: shopData.subscriptionStart,
     subscriptionEnd: shopData.subscriptionEnd,
     subscriptionStatus: shopData.subscriptionStatus,
+    plan,
     notes: shopData.notes,
   }).returning();
 
@@ -117,6 +120,7 @@ router.patch("/owner/shops/:shopId", requireAuth, requireOwner, async (req, res)
   if (d.subscriptionEnd != null) updateData.subscriptionEnd = d.subscriptionEnd;
   if (d.subscriptionStatus != null) updateData.subscriptionStatus = d.subscriptionStatus;
   if (d.notes !== undefined) updateData.notes = d.notes;
+  if (req.body.plan === 'light' || req.body.plan === 'premium') updateData.plan = req.body.plan;
 
   const [shop] = await db.update(shopsTable).set(updateData).where(eq(shopsTable.id, id)).returning();
   if (!shop) {

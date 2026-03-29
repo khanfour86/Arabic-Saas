@@ -96,6 +96,7 @@ export interface CreateShopBody {
   notes?: string | null;
   managerUsername: string;
   managerPassword: string;
+  plan?: string;
 }
 
 /**
@@ -128,6 +129,7 @@ export interface UpdateShopBody {
   subscriptionStatus?: UpdateShopBodySubscriptionStatus;
   /** @nullable */
   notes?: string | null;
+  plan?: string;
 }
 
 export interface AreaCount {

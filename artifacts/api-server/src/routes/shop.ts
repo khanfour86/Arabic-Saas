@@ -19,14 +19,14 @@ router.get("/shop/dashboard", requireAuth, requireShopRole("shop_manager", "rece
   const deliveredToday = allInvoices.filter(i => i.status === "delivered" && i.deliveredAt && new Date(i.deliveredAt) >= today).length;
   const totalDelivered = allInvoices.filter(i => i.status === "delivered").length;
 
-  const [shop] = await db.select({ subscriptionStatus: shopsTable.subscriptionStatus }).from(shopsTable).where(eq(shopsTable.id, user.shopId!));
-  res.json({ underTailoring, readyForDelivery, deliveredToday, totalDelivered, subscriptionStatus: shop?.subscriptionStatus ?? 'active' });
+  const [shop] = await db.select({ subscriptionStatus: shopsTable.subscriptionStatus, plan: shopsTable.plan }).from(shopsTable).where(eq(shopsTable.id, user.shopId!));
+  res.json({ underTailoring, readyForDelivery, deliveredToday, totalDelivered, subscriptionStatus: shop?.subscriptionStatus ?? 'active', plan: shop?.plan ?? 'premium' });
 });
 
 router.get("/shop/status", isShopUser, async (req, res): Promise<void> => {
   const user = (req as any).user as AuthUser;
-  const [shop] = await db.select({ subscriptionStatus: shopsTable.subscriptionStatus }).from(shopsTable).where(eq(shopsTable.id, user.shopId!));
-  res.json({ subscriptionStatus: shop?.subscriptionStatus ?? 'active' });
+  const [shop] = await db.select({ subscriptionStatus: shopsTable.subscriptionStatus, plan: shopsTable.plan }).from(shopsTable).where(eq(shopsTable.id, user.shopId!));
+  res.json({ subscriptionStatus: shop?.subscriptionStatus ?? 'active', plan: shop?.plan ?? 'premium' });
 });
 
 router.get("/shop/tailor-queue", requireAuth, requireShopRole("shop_manager", "tailor"), async (req, res): Promise<void> => {
@@ -86,6 +86,8 @@ router.get("/shop/tailor-queue", requireAuth, requireShopRole("shop_manager", "t
     items.push({
       invoiceId: invoice.id,
       invoiceNumber: invoice.invoiceNumber,
+      bookNumber: invoice.bookNumber ?? null,
+      pageNumber: invoice.pageNumber ?? null,
       customerName: customer?.name ?? "غير معروف",
       customerPhone: customer?.phone ?? "",
       subOrders: soWithDetails,

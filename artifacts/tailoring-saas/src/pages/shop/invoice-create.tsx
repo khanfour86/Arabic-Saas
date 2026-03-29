@@ -7,15 +7,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useLocation, useSearch } from 'wouter';
-import { useQueryClient } from '@tanstack/react-query';
-import { Loader2, Plus, Trash2, Save, User, Scissors } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Loader2, Plus, Trash2, Save, User, Scissors, BookOpen } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 export function InvoiceCreate() {
   const searchString = useSearch();
   const params = new URLSearchParams(searchString);
   const customerId = parseInt(params.get('customerId') || '0');
-  
+
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -25,9 +25,23 @@ export function InvoiceCreate() {
     query: { enabled: !!customerId }
   });
 
+  const { data: shopStatus } = useQuery({
+    queryKey: ['/api/shop/status'],
+    queryFn: () => fetch('/api/shop/status').then(r => r.ok ? r.json() : null),
+    staleTime: 60000,
+  });
+  const isLightPlan = shopStatus?.plan === 'light';
+
   const [subOrders, setSubOrders] = useState<CreateSubOrderInput[]>([
     { profileId: 0, quantity: 0, fabricSource: 'shop_fabric', fabricDescription: '', price: 0, paidAmount: 0 }
   ]);
+
+  const [bookNumber, setBookNumber] = useState('');
+  const [pageNumber, setPageNumber] = useState('');
+  const [lightQty, setLightQty] = useState(1);
+  const [lightPrice, setLightPrice] = useState(0);
+  const [lightPaid, setLightPaid] = useState(0);
+  const [submittingLight, setSubmittingLight] = useState(false);
 
   const mutation = useCreateInvoice({
     mutation: {
@@ -48,33 +62,72 @@ export function InvoiceCreate() {
   const totalAmount = subOrders.reduce((sum, o) => sum + (Number(o.price) || 0), 0);
   const totalPaid = subOrders.reduce((sum, o) => sum + (Number(o.paidAmount) || 0), 0);
 
-const handleSubmit = () => {
-  if (subOrders.some(o => !o.profileId)) {
-    toast({ title: t('error'), description: t('mustSelectProfile'), variant: 'destructive' });
-    return;
-  }
-  if (subOrders.some(o => !o.quantity || Number(o.quantity) <= 0)) {
-    toast({ title: t('error'), description: t('mustEnterQty'), variant: 'destructive' });
-    return;
-  }
-  if (Number(subOrders[0].price) <= 0) {
-    toast({ title: t('error'), description: t('mustEnterPrice'), variant: 'destructive' });
-    return;
-  }
-  if (Number(subOrders[0].paidAmount) > Number(subOrders[0].price)) {
-    toast({ title: t('error'), description: t('paidExceedsPriceToast'), variant: 'destructive' });
-    return;
-  }
-
-  console.log('SUBORDERS_BEFORE_SAVE', subOrders);
-
-  mutation.mutate({
-    data: {
-      customerId,
-      subOrders,
+  const handleLightSubmit = async () => {
+    if (!bookNumber.trim()) {
+      toast({ title: t('error'), description: t('mustEnterBookNumber'), variant: 'destructive' });
+      return;
     }
-  });
-};
+    if (!lightQty || lightQty <= 0) {
+      toast({ title: t('error'), description: t('mustEnterQty'), variant: 'destructive' });
+      return;
+    }
+    if (!lightPrice || lightPrice <= 0) {
+      toast({ title: t('error'), description: t('mustEnterPrice'), variant: 'destructive' });
+      return;
+    }
+    if (lightPaid > lightPrice) {
+      toast({ title: t('error'), description: t('paidExceedsPriceToast'), variant: 'destructive' });
+      return;
+    }
+    setSubmittingLight(true);
+    try {
+      const res = await fetch('/api/shop/invoices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customerId,
+          bookNumber: bookNumber.trim(),
+          pageNumber: pageNumber.trim() || undefined,
+          quantity: lightQty,
+          price: lightPrice,
+          paidAmount: lightPaid,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || t('error'));
+      queryClient.invalidateQueries({ queryKey: ['/api/shop/invoices'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/shop/dashboard'] });
+      toast({ title: t('invoiceCreated'), description: `${t('invoiceNumber')} ${data.invoiceNumber}` });
+      setLocation(`/shop/invoices/${data.id}`);
+    } catch (err: any) {
+      toast({ title: t('error'), description: err.message, variant: 'destructive' });
+    } finally {
+      setSubmittingLight(false);
+    }
+  };
+
+  const handlePremiumSubmit = () => {
+    if (subOrders.some(o => !o.profileId)) {
+      toast({ title: t('error'), description: t('mustSelectProfile'), variant: 'destructive' });
+      return;
+    }
+    if (subOrders.some(o => !o.quantity || Number(o.quantity) <= 0)) {
+      toast({ title: t('error'), description: t('mustEnterQty'), variant: 'destructive' });
+      return;
+    }
+    if (Number(subOrders[0].price) <= 0) {
+      toast({ title: t('error'), description: t('mustEnterPrice'), variant: 'destructive' });
+      return;
+    }
+    if (Number(subOrders[0].paidAmount) > Number(subOrders[0].price)) {
+      toast({ title: t('error'), description: t('paidExceedsPriceToast'), variant: 'destructive' });
+      return;
+    }
+    mutation.mutate({ data: { customerId, subOrders } });
+  };
+
+  const isPending = isLightPlan ? submittingLight : mutation.isPending;
+  const handleSubmit = isLightPlan ? handleLightSubmit : handlePremiumSubmit;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 max-w-4xl mx-auto">
@@ -90,221 +143,355 @@ const handleSubmit = () => {
         </div>
       </div>
 
-      <div className="space-y-6">
-        {subOrders.map((order, index) => (
-          <Card key={index} className="border-0 shadow-lg rounded-2xl overflow-visible relative z-10">
-            <div className="absolute -right-3 -top-3 w-8 h-8 bg-primary text-white rounded-full flex items-center justify-center font-bold shadow-md">
-              {index + 1}
-            </div>
-            <CardContent className="p-6">
+      {isLightPlan ? (
+        <div className="space-y-6">
+          <Card className="border-0 shadow-lg rounded-2xl overflow-hidden">
+            <CardContent className="p-6 space-y-6">
+              <div className="flex items-center gap-2 text-sky-600 font-bold text-sm">
+                <BookOpen className="w-4 h-4" />
+                <span>{t('planLight')} — {t('planLightDesc')}</span>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                
-                <div className="space-y-2 md:col-span-2">
-                  <label className="text-sm font-bold">{t('profileLabel')}</label>
-                  <Select 
-                    value={order.profileId ? order.profileId.toString() : ''} 
-                    onValueChange={(v) => {
-                      const newOrders = [...subOrders];
-                      newOrders[index].profileId = parseInt(v);
-                      setSubOrders(newOrders);
-                    }}
-                  >
-                    <SelectTrigger className="h-14 bg-muted/50 rounded-xl text-lg font-bold" dir={dir}>
-                      <SelectValue placeholder={t('choosePerson')} />
-                    </SelectTrigger>
-                    <SelectContent dir={dir}>
-                      {[...customer.profiles]
-                        .sort((a: any, b: any) => {
-                          if (a.isMain !== b.isMain) return a.isMain ? -1 : 1;
-                          if (a.isProof !== b.isProof) return a.isProof ? -1 : 1;
-                          return 0;
-                        })
-                        .map((p: any) => (
-                          <SelectItem key={p.id} value={p.id.toString()}>
-                            <span className="flex items-center gap-2">
-                              {p.name}
-                              {p.isMain && <span className="text-xs bg-accent/30 text-accent-foreground px-1.5 py-0.5 rounded-full">{t('badgeMain')}</span>}
-                              {p.isProof && <span className="text-xs bg-orange-500/20 text-orange-700 px-1.5 py-0.5 rounded-full">{t('badgeProof')}</span>}
-                            </span>
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
+                <div className="space-y-2">
+                  <label className="text-sm font-bold">
+                    {t('bookNumberLabel')}
+                    <span className="text-destructive mr-1">*</span>
+                  </label>
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    value={bookNumber}
+                    placeholder={t('enterBookNumber')}
+                    onChange={(e) => setBookNumber(toEnglishDigits(e.target.value))}
+                    className={`h-14 bg-muted/50 rounded-xl text-center text-lg font-bold ${!bookNumber.trim() ? 'border-destructive/40' : ''}`}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-bold">{t('pageNumberLabel')}</label>
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    value={pageNumber}
+                    placeholder={t('enterPageNumber')}
+                    onChange={(e) => setPageNumber(toEnglishDigits(e.target.value))}
+                    className="h-14 bg-muted/50 rounded-xl text-center text-lg font-bold"
+                  />
                 </div>
 
                 <div className="space-y-2">
                   <label className="text-sm font-bold">
                     {t('quantityLabel')}
-                    {(!order.quantity || order.quantity <= 0) && (
-                      <span className="text-destructive mr-1">*</span>
-                    )}
+                    {(!lightQty || lightQty <= 0) && <span className="text-destructive mr-1">*</span>}
                   </label>
-                  <Input 
+                  <Input
                     type="text"
                     inputMode="numeric"
-                    value={order.quantity || ''}
+                    value={lightQty || ''}
                     placeholder={t('enterQty')}
                     onChange={(e) => {
                       const raw = toEnglishDigits(e.target.value).replace(/[^0-9]/g, '');
-                      const newOrders = [...subOrders];
-                      newOrders[index].quantity = raw === '' ? 0 : parseInt(raw);
-                      setSubOrders(newOrders);
+                      setLightQty(raw === '' ? 0 : parseInt(raw));
                     }}
-                    className={`h-14 bg-muted/50 rounded-xl text-center text-lg font-bold ${(!order.quantity || order.quantity <= 0) ? 'border-destructive/50 focus:border-destructive' : ''}`}
+                    className={`h-14 bg-muted/50 rounded-xl text-center text-lg font-bold ${(!lightQty || lightQty <= 0) ? 'border-destructive/50' : ''}`}
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-bold">{t('fabricSource')}</label>
-                  <Select 
-                    value={order.fabricSource} 
-                    onValueChange={(v: any) => {
-                      const newOrders = [...subOrders];
-                      newOrders[index].fabricSource = v;
-                      setSubOrders(newOrders);
-                    }}
-                  >
-                    <SelectTrigger className="h-14 bg-muted/50 rounded-xl font-bold" dir={dir}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent dir={dir}>
-                      <SelectItem value="shop_fabric">{t('shopFabric')}</SelectItem>
-                      <SelectItem value="customer_fabric">{t('customerFabric')}</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <label className="text-sm font-bold text-primary">{t('totalPriceLabel')}</label>
+                  <div className="relative">
+                    <Input
+                      type="text"
+                      inputMode="decimal"
+                      value={lightPrice || ''}
+                      onChange={(e) => {
+                        const val = parseFloat(toEnglishDigits(e.target.value)) || 0;
+                        setLightPrice(val);
+                        if (lightPaid > val) setLightPaid(val);
+                      }}
+                      className="h-14 pl-12 bg-white border-primary/30 focus-visible:ring-primary rounded-xl text-xl font-bold text-primary"
+                      dir="ltr"
+                    />
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold">{t('kwd')}</span>
+                  </div>
                 </div>
 
                 <div className="space-y-2 md:col-span-2">
-                  <label className="text-sm font-bold">{t('fabricDetails')}</label>
-                  <Input 
-                    value={order.fabricDescription || ''}
-                    onChange={(e) => {
-                      const newOrders = [...subOrders];
-                      newOrders[index].fabricDescription = e.target.value;
-                      setSubOrders(newOrders);
-                    }}
-                    className="h-14 bg-muted/50 rounded-xl"
-                    placeholder={t('fabricDetailsHint')}
-                  />
+                  <div className="flex justify-between items-center">
+                    <label className="text-sm font-bold text-emerald-600">{t('paidAmountLabel')}</label>
+                    {lightPrice > 0 && lightPaid === lightPrice && (
+                      <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">{t('fullyPaid')}</span>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <Input
+                      type="text"
+                      inputMode="decimal"
+                      value={lightPaid || ''}
+                      onChange={(e) => setLightPaid(parseFloat(toEnglishDigits(e.target.value)) || 0)}
+                      className={`h-14 pl-12 bg-white rounded-xl text-xl font-bold transition-colors ${
+                        lightPaid > lightPrice && lightPrice > 0
+                          ? 'border-red-500 border-2 focus-visible:ring-red-500 text-red-600'
+                          : 'border-emerald-500/30 focus-visible:ring-emerald-500 text-emerald-600'
+                      }`}
+                      dir="ltr"
+                    />
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold">{t('kwd')}</span>
+                  </div>
+                  {lightPaid > lightPrice && lightPrice > 0 ? (
+                    <p className="text-xs text-red-600 font-bold">{t('paidExceedsTotal')}</p>
+                  ) : lightPrice > 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      {t('remaining')} <span className="font-bold text-foreground">{(lightPrice - lightPaid).toFixed(3)} {t('kwd')}</span>
+                    </p>
+                  ) : null}
                 </div>
-
-                {index === 0 && (
-                  <div className="space-y-2">
-                    <label className="text-sm font-bold text-primary">{t('totalPriceLabel')}</label>
-                    <div className="relative">
-                      <Input 
-                        type="text"
-                        inputMode="decimal"
-                        value={order.price || ''}
-                        onChange={(e) => {
-                          const newPrice = parseFloat(toEnglishDigits(e.target.value)) || 0;
-                          const newOrders = [...subOrders];
-                          newOrders[0].price = newPrice;
-                          if (newOrders[0].paidAmount > newPrice) {
-                            newOrders[0].paidAmount = newPrice;
-                          }
-                          setSubOrders(newOrders);
-                        }}
-                        className="h-14 pl-12 bg-white border-primary/30 focus-visible:ring-primary rounded-xl text-xl font-bold text-primary"
-                        dir="ltr"
-                      />
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold">{t('kwd')}</span>
-                    </div>
-                  </div>
-                )}
-
-                {index === 0 && (
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <label className="text-sm font-bold text-emerald-600">{t('paidAmountLabel')}</label>
-                      {order.price > 0 && order.paidAmount === order.price && (
-                        <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">{t('fullyPaid')}</span>
-                      )}
-                    </div>
-                    <div className="relative">
-                      <Input 
-                        type="text"
-                        inputMode="decimal"
-                        value={order.paidAmount || ''}
-                        onChange={(e) => {
-                          const paid = parseFloat(toEnglishDigits(e.target.value)) || 0;
-                          const newOrders = [...subOrders];
-                          newOrders[0].paidAmount = paid;
-                          setSubOrders(newOrders);
-                        }}
-                        className={`h-14 pl-12 bg-white rounded-xl text-xl font-bold transition-colors ${
-                          order.paidAmount > order.price && order.price > 0
-                            ? 'border-red-500 border-2 focus-visible:ring-red-500 text-red-600'
-                            : 'border-emerald-500/30 focus-visible:ring-emerald-500 text-emerald-600'
-                        }`}
-                        dir="ltr"
-                      />
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold">{t('kwd')}</span>
-                    </div>
-                    {order.paidAmount > order.price && order.price > 0 ? (
-                      <p className="text-xs text-red-600 font-bold">{t('paidExceedsTotal')}</p>
-                    ) : order.price > 0 ? (
-                      <p className="text-xs text-muted-foreground">
-                        {t('remaining')} <span className="font-bold text-foreground">{(order.price - order.paidAmount).toFixed(3)} {t('kwd')}</span>
-                      </p>
-                    ) : null}
-                  </div>
-                )}
-
               </div>
-              
-              {subOrders.length > 1 && (
-                <div className="mt-6 pt-4 border-t border-border text-left">
-                  <Button 
-                    variant="ghost" 
-                    className="text-red-500 hover:text-red-600 hover:bg-red-50"
-                    onClick={() => {
-                      const newOrders = [...subOrders];
-                      newOrders.splice(index, 1);
-                      setSubOrders(newOrders);
-                    }}
-                  >
-                    <Trash2 className="w-4 h-4 ml-2" /> {t('removeOrder')}
-                  </Button>
-                </div>
-              )}
             </CardContent>
           </Card>
-        ))}
 
-        <Button 
-          variant="outline" 
-          className="w-full h-14 border-dashed border-2 border-primary/30 text-primary hover:bg-primary/5 rounded-2xl font-bold text-lg"
-          onClick={() => setSubOrders([...subOrders, { profileId: 0, quantity: 0, fabricSource: 'shop_fabric', fabricDescription: '', price: 0, paidAmount: 0 }])}
-        >
-          <Plus className="w-5 h-5 ml-2" /> {t('addAnotherOrder')}
-        </Button>
-      </div>
-
-      <div className="sticky bottom-4 md:bottom-8 mt-12 bg-white/80 backdrop-blur-xl border border-border shadow-2xl rounded-3xl p-4 flex flex-col md:flex-row items-center justify-between gap-4 z-40">
-        <div className="flex gap-6 w-full md:w-auto px-4 justify-between">
-          <div>
-            <div className="text-xs text-muted-foreground font-bold">{t('invoiceTotalBar')}</div>
-            <div className="text-2xl font-display font-bold text-primary">{totalAmount} {t('kwd')}</div>
-          </div>
-          <div>
-            <div className="text-xs text-muted-foreground font-bold">{t('colPaid')}</div>
-            <div className="text-2xl font-display font-bold text-emerald-600">{totalPaid} {t('kwd')}</div>
-          </div>
-          <div>
-            <div className="text-xs text-muted-foreground font-bold">{t('colRemaining')}</div>
-            <div className="text-2xl font-display font-bold text-red-500">{totalAmount - totalPaid} {t('kwd')}</div>
+          <div className="sticky bottom-4 md:bottom-8 mt-12 bg-white/80 backdrop-blur-xl border border-border shadow-2xl rounded-3xl p-4 flex flex-col md:flex-row items-center justify-between gap-4 z-40">
+            <div className="flex gap-6 w-full md:w-auto px-4 justify-between">
+              <div>
+                <div className="text-xs text-muted-foreground font-bold">{t('invoiceTotalBar')}</div>
+                <div className="text-2xl font-display font-bold text-primary">{lightPrice.toFixed(3)} {t('kwd')}</div>
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground font-bold">{t('colPaid')}</div>
+                <div className="text-2xl font-display font-bold text-emerald-600">{lightPaid.toFixed(3)} {t('kwd')}</div>
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground font-bold">{t('colRemaining')}</div>
+                <div className="text-2xl font-display font-bold text-red-500">{Math.max(0, lightPrice - lightPaid).toFixed(3)} {t('kwd')}</div>
+              </div>
+            </div>
+            <Button
+              className="w-full md:w-auto h-14 px-12 rounded-2xl text-lg font-bold bg-gradient-to-r from-primary to-primary/90 shadow-lg shadow-primary/20 hover:scale-105 transition-transform"
+              onClick={handleLightSubmit}
+              disabled={isPending}
+            >
+              {isPending ? <Loader2 className="w-6 h-6 animate-spin" /> : <><Save className="w-5 h-5 ml-2" /> {t('saveInvoice')}</>}
+            </Button>
           </div>
         </div>
-        
-        <Button 
-          className="w-full md:w-auto h-14 px-12 rounded-2xl text-lg font-bold bg-gradient-to-r from-primary to-primary/90 shadow-lg shadow-primary/20 hover:scale-105 transition-transform"
-          onClick={handleSubmit}
-          disabled={mutation.isPending}
-        >
-          {mutation.isPending ? <Loader2 className="w-6 h-6 animate-spin" /> : <><Save className="w-5 h-5 ml-2" /> {t('saveInvoice')}</>}
-        </Button>
-      </div>
+      ) : (
+        <div className="space-y-6">
+          {subOrders.map((order, index) => (
+            <Card key={index} className="border-0 shadow-lg rounded-2xl overflow-visible relative z-10">
+              <div className="absolute -right-3 -top-3 w-8 h-8 bg-primary text-white rounded-full flex items-center justify-center font-bold shadow-md">
+                {index + 1}
+              </div>
+              <CardContent className="p-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-sm font-bold">{t('profileLabel')}</label>
+                    <Select
+                      value={order.profileId ? order.profileId.toString() : ''}
+                      onValueChange={(v) => {
+                        const newOrders = [...subOrders];
+                        newOrders[index].profileId = parseInt(v);
+                        setSubOrders(newOrders);
+                      }}
+                    >
+                      <SelectTrigger className="h-14 bg-muted/50 rounded-xl text-lg font-bold" dir={dir}>
+                        <SelectValue placeholder={t('choosePerson')} />
+                      </SelectTrigger>
+                      <SelectContent dir={dir}>
+                        {[...customer.profiles]
+                          .sort((a: any, b: any) => {
+                            if (a.isMain !== b.isMain) return a.isMain ? -1 : 1;
+                            if (a.isProof !== b.isProof) return a.isProof ? -1 : 1;
+                            return 0;
+                          })
+                          .map((p: any) => (
+                            <SelectItem key={p.id} value={p.id.toString()}>
+                              <span className="flex items-center gap-2">
+                                {p.name}
+                                {p.isMain && <span className="text-xs bg-accent/30 text-accent-foreground px-1.5 py-0.5 rounded-full">{t('badgeMain')}</span>}
+                                {p.isProof && <span className="text-xs bg-orange-500/20 text-orange-700 px-1.5 py-0.5 rounded-full">{t('badgeProof')}</span>}
+                              </span>
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold">
+                      {t('quantityLabel')}
+                      {(!order.quantity || order.quantity <= 0) && (
+                        <span className="text-destructive mr-1">*</span>
+                      )}
+                    </label>
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      value={order.quantity || ''}
+                      placeholder={t('enterQty')}
+                      onChange={(e) => {
+                        const raw = toEnglishDigits(e.target.value).replace(/[^0-9]/g, '');
+                        const newOrders = [...subOrders];
+                        newOrders[index].quantity = raw === '' ? 0 : parseInt(raw);
+                        setSubOrders(newOrders);
+                      }}
+                      className={`h-14 bg-muted/50 rounded-xl text-center text-lg font-bold ${(!order.quantity || order.quantity <= 0) ? 'border-destructive/50 focus:border-destructive' : ''}`}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold">{t('fabricSource')}</label>
+                    <Select
+                      value={order.fabricSource}
+                      onValueChange={(v: any) => {
+                        const newOrders = [...subOrders];
+                        newOrders[index].fabricSource = v;
+                        setSubOrders(newOrders);
+                      }}
+                    >
+                      <SelectTrigger className="h-14 bg-muted/50 rounded-xl font-bold" dir={dir}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent dir={dir}>
+                        <SelectItem value="shop_fabric">{t('shopFabric')}</SelectItem>
+                        <SelectItem value="customer_fabric">{t('customerFabric')}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-sm font-bold">{t('fabricDetails')}</label>
+                    <Input
+                      value={order.fabricDescription || ''}
+                      onChange={(e) => {
+                        const newOrders = [...subOrders];
+                        newOrders[index].fabricDescription = e.target.value;
+                        setSubOrders(newOrders);
+                      }}
+                      className="h-14 bg-muted/50 rounded-xl"
+                      placeholder={t('fabricDetailsHint')}
+                    />
+                  </div>
+
+                  {index === 0 && (
+                    <div className="space-y-2">
+                      <label className="text-sm font-bold text-primary">{t('totalPriceLabel')}</label>
+                      <div className="relative">
+                        <Input
+                          type="text"
+                          inputMode="decimal"
+                          value={order.price || ''}
+                          onChange={(e) => {
+                            const newPrice = parseFloat(toEnglishDigits(e.target.value)) || 0;
+                            const newOrders = [...subOrders];
+                            newOrders[0].price = newPrice;
+                            if (newOrders[0].paidAmount > newPrice) {
+                              newOrders[0].paidAmount = newPrice;
+                            }
+                            setSubOrders(newOrders);
+                          }}
+                          className="h-14 pl-12 bg-white border-primary/30 focus-visible:ring-primary rounded-xl text-xl font-bold text-primary"
+                          dir="ltr"
+                        />
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold">{t('kwd')}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {index === 0 && (
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <label className="text-sm font-bold text-emerald-600">{t('paidAmountLabel')}</label>
+                        {order.price > 0 && order.paidAmount === order.price && (
+                          <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">{t('fullyPaid')}</span>
+                        )}
+                      </div>
+                      <div className="relative">
+                        <Input
+                          type="text"
+                          inputMode="decimal"
+                          value={order.paidAmount || ''}
+                          onChange={(e) => {
+                            const paid = parseFloat(toEnglishDigits(e.target.value)) || 0;
+                            const newOrders = [...subOrders];
+                            newOrders[0].paidAmount = paid;
+                            setSubOrders(newOrders);
+                          }}
+                          className={`h-14 pl-12 bg-white rounded-xl text-xl font-bold transition-colors ${
+                            order.paidAmount > order.price && order.price > 0
+                              ? 'border-red-500 border-2 focus-visible:ring-red-500 text-red-600'
+                              : 'border-emerald-500/30 focus-visible:ring-emerald-500 text-emerald-600'
+                          }`}
+                          dir="ltr"
+                        />
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold">{t('kwd')}</span>
+                      </div>
+                      {order.paidAmount > order.price && order.price > 0 ? (
+                        <p className="text-xs text-red-600 font-bold">{t('paidExceedsTotal')}</p>
+                      ) : order.price > 0 ? (
+                        <p className="text-xs text-muted-foreground">
+                          {t('remaining')} <span className="font-bold text-foreground">{(order.price - order.paidAmount).toFixed(3)} {t('kwd')}</span>
+                        </p>
+                      ) : null}
+                    </div>
+                  )}
+
+                </div>
+
+                {subOrders.length > 1 && (
+                  <div className="mt-6 pt-4 border-t border-border text-left">
+                    <Button
+                      variant="ghost"
+                      className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                      onClick={() => {
+                        const newOrders = [...subOrders];
+                        newOrders.splice(index, 1);
+                        setSubOrders(newOrders);
+                      }}
+                    >
+                      <Trash2 className="w-4 h-4 ml-2" /> {t('removeOrder')}
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+
+          <Button
+            variant="outline"
+            className="w-full h-14 border-dashed border-2 border-primary/30 text-primary hover:bg-primary/5 rounded-2xl font-bold text-lg"
+            onClick={() => setSubOrders([...subOrders, { profileId: 0, quantity: 0, fabricSource: 'shop_fabric', fabricDescription: '', price: 0, paidAmount: 0 }])}
+          >
+            <Plus className="w-5 h-5 ml-2" /> {t('addAnotherOrder')}
+          </Button>
+
+          <div className="sticky bottom-4 md:bottom-8 mt-12 bg-white/80 backdrop-blur-xl border border-border shadow-2xl rounded-3xl p-4 flex flex-col md:flex-row items-center justify-between gap-4 z-40">
+            <div className="flex gap-6 w-full md:w-auto px-4 justify-between">
+              <div>
+                <div className="text-xs text-muted-foreground font-bold">{t('invoiceTotalBar')}</div>
+                <div className="text-2xl font-display font-bold text-primary">{totalAmount} {t('kwd')}</div>
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground font-bold">{t('colPaid')}</div>
+                <div className="text-2xl font-display font-bold text-emerald-600">{totalPaid} {t('kwd')}</div>
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground font-bold">{t('colRemaining')}</div>
+                <div className="text-2xl font-display font-bold text-red-500">{totalAmount - totalPaid} {t('kwd')}</div>
+              </div>
+            </div>
+
+            <Button
+              className="w-full md:w-auto h-14 px-12 rounded-2xl text-lg font-bold bg-gradient-to-r from-primary to-primary/90 shadow-lg shadow-primary/20 hover:scale-105 transition-transform"
+              onClick={handlePremiumSubmit}
+              disabled={isPending}
+            >
+              {isPending ? <Loader2 className="w-6 h-6 animate-spin" /> : <><Save className="w-5 h-5 ml-2" /> {t('saveInvoice')}</>}
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

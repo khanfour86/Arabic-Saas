@@ -29,6 +29,7 @@ export function CustomersList() {
     staleTime: 60000, retry: false,
   });
   const isRestricted = shopStatusData?.subscriptionStatus === 'expired' || shopStatusData?.subscriptionStatus === 'suspended';
+  const isLightPlan = shopStatusData?.plan === 'light';
   const [, setLocation] = useLocation();
   const { t, dir } = useTranslation();
 
@@ -173,6 +174,12 @@ function CustomerCreateDialog({ trigger, initialPhone = '' }: { trigger?: React.
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const { t, dir } = useTranslation();
+  const { data: shopStatusData } = useQuery({
+    queryKey: ['/api/shop/status'],
+    queryFn: () => fetch('/api/shop/status').then(r => r.ok ? r.json() : null),
+    staleTime: 60000, retry: false,
+  });
+  const isLightPlan = shopStatusData?.plan === 'light';
 
   useEffect(() => { setPhone(initialPhone); }, [initialPhone]);
 
@@ -294,7 +301,7 @@ const mutation = useCreateCustomer({
             className="w-full h-14 rounded-xl text-lg font-bold mt-6"
             disabled={mutation.isPending || phone.length !== 8}
           >
-            {mutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : t('saveContinue')}
+            {mutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : t(isLightPlan ? 'saveContinueLight' : 'saveContinue')}
           </Button>
         </form>
       </DialogContent>

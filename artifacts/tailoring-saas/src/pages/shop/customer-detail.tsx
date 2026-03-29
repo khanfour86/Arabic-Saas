@@ -238,6 +238,14 @@ export function CustomerDetail() {
     enabled: !!customerId,
   });
   const isRestricted = shopStatusData?.subscriptionStatus === 'expired' || shopStatusData?.subscriptionStatus === 'suspended';
+  const isLightPlan = shopStatusData?.plan === 'light';
+
+  const { data: lightInvoicesData } = useQuery({
+    queryKey: [`/api/shop/invoices`, customerId, 'light'],
+    queryFn: () => fetch(`/api/shop/invoices?customerId=${customerId}&limit=5`).then(r => r.ok ? r.json() : null),
+    enabled: !!customerId && isLightPlan,
+  });
+  const lightInvoices: any[] = lightInvoicesData?.invoices ?? [];
 
   const canEdit = (user?.role === 'shop_manager' || user?.role === 'reception') && !isRestricted;
   const canEditPhone = user?.role === 'shop_manager' && !isRestricted;
@@ -341,117 +349,175 @@ export function CustomerDetail() {
         </CardContent>
       </Card>
 
-      {/* Profiles section header */}
-      <div className="flex items-center justify-between mt-8 mb-2">
-        <h2 className="text-2xl font-display font-bold text-primary flex items-center gap-2">
-          <div className="w-2 h-6 bg-accent rounded-full" />
-          {t('measurementProfiles')}
-        </h2>
-        <ProfileCreateDialog customerId={customer.id} t={t} />
-      </div>
-
-      {/* Profile selector dropdown */}
-      {(() => {
-        const mainProfiles = customer.profiles.filter((p: any) => !p.isProof);
-        const activeProfile = mainProfiles.find((p: any) => p.id === selectedProfileId) ?? mainProfiles[0];
-        return (
-          <>
-            {mainProfiles.length > 1 && (
-              <div className="flex items-center gap-3 mb-4">
-                <label className="text-sm font-bold text-muted-foreground whitespace-nowrap">{t('selectProfile')}:</label>
-                <Select
-                  value={selectedProfileId?.toString() ?? ''}
-                  onValueChange={(val) => setSelectedProfileId(parseInt(val))}
-                  dir={dir}
-                >
-                  <SelectTrigger className="bg-white border-primary/20 rounded-xl shadow-sm max-w-xs font-bold">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent dir={dir}>
-                    {mainProfiles.map((p: any) => (
-                      <SelectItem key={p.id} value={p.id.toString()}>
-                        {p.name}
-                        {p.isMain && (
-                          <span className="text-[10px] bg-accent/20 text-accent-foreground px-1.5 py-0.5 rounded-full mr-1.5">{t('badgeMain')}</span>
-                        )}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            {activeProfile && (
-              <ProfileCard
-                key={activeProfile.id}
-                profile={activeProfile}
-                customerId={customer.id}
-                canEdit={canEdit}
-                t={t}
-              />
-            )}
-          </>
-        );
-      })()}
-
-      {/* Measurement Updates */}
-      <div>
-        <h2 className="text-2xl font-display font-bold text-primary flex items-center gap-2 mb-4">
-          <div className="w-2 h-6 bg-primary/40 rounded-full" />
-          <Clock className="w-5 h-5" />
-          {t('recentMeasurementUpdates')}
-        </h2>
-        <Card className="border-0 shadow-lg rounded-2xl overflow-hidden">
-          <CardContent className="p-0">
-            {!filteredMeasurements ? (
-              <div className="flex justify-center p-6"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
-            ) : filteredMeasurements.length === 0 ? (
-              <div className="flex flex-col items-center gap-2 p-8 text-muted-foreground">
-                <Ruler className="w-6 h-6 opacity-40" />
-                <p className="text-sm">{t('noMeasurementUpdates')}</p>
-              </div>
-            ) : (
-              <div className="divide-y divide-border">
-                {filteredMeasurements.map((u: any) => (
-                  <button
-                    key={u.profileId}
-                    onClick={() => setMeasurementPopup(u)}
-                    className="w-full flex items-center gap-4 px-5 py-3 hover:bg-muted/30 active:bg-muted/50 transition-colors cursor-pointer text-start"
-                  >
-                    <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                      <Ruler className="w-4 h-4 text-primary" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-bold text-sm truncate">{u.profileName}</p>
-                      <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground mt-0.5">
-                        {[
-                          { k: t('mLength'), v: u.length },
-                          { k: t('mShoulder'), v: u.shoulder },
-                          { k: t('mChest'), v: u.chest },
-                          { k: t('mSleeve'), v: u.sleeve },
-                          { k: t('mNeck'), v: u.neck },
-                        ].filter(f => f.v != null).map(f => (
-                          <span key={f.k}><span className="text-muted-foreground/60">{f.k}:</span> <span className="font-medium text-foreground">{f.v}</span></span>
-                        ))}
+      {isLightPlan ? (
+        /* ── Light plan: invoice history ── */
+        <div className="mt-6">
+          <h2 className="text-2xl font-display font-bold text-primary flex items-center gap-2 mb-4">
+            <div className="w-2 h-6 bg-accent rounded-full" />
+            <FileText className="w-5 h-5" />
+            {t('lightInvoiceHistory')}
+          </h2>
+          <Card className="border-0 shadow-lg rounded-2xl overflow-hidden">
+            <CardContent className="p-0">
+              {!lightInvoicesData ? (
+                <div className="flex justify-center p-6"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+              ) : lightInvoices.length === 0 ? (
+                <div className="flex flex-col items-center gap-2 p-8 text-muted-foreground">
+                  <FileText className="w-6 h-6 opacity-40" />
+                  <p className="text-sm">{t('lightNoInvoices')}</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-border">
+                  {lightInvoices.map((inv: any) => (
+                    <Link key={inv.id} href={`/shop/invoices/${inv.id}`}>
+                      <div className="flex items-center gap-4 px-5 py-4 hover:bg-muted/30 active:bg-muted/50 transition-colors cursor-pointer">
+                        <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                          <FileText className="w-5 h-5 text-primary" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-sm">#{inv.invoiceNumber}</span>
+                            {inv.bookNumber && (
+                              <span className="text-xs bg-sky-100 text-sky-700 px-2 py-0.5 rounded-full font-bold">
+                                {t('lightBookRef')} {inv.bookNumber}
+                                {inv.pageNumber ? ` / ${t('lightPageRef')} ${inv.pageNumber}` : ''}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-0.5">
+                            {format(new Date(inv.createdAt), 'yyyy/MM/dd')}
+                          </div>
+                        </div>
+                        <div className="text-end shrink-0">
+                          <div className="font-bold text-primary">{Number(inv.totalAmount).toFixed(3)} {t('kwd')}</div>
+                          <div className={`text-xs font-bold mt-0.5 ${inv.status === 'delivered' ? 'text-emerald-600' : inv.status === 'ready' ? 'text-blue-600' : 'text-amber-600'}`}>
+                            {inv.status === 'delivered' ? t('statusDelivered') : inv.status === 'ready' ? t('statusReady') : t('statusUnder')}
+                          </div>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
                       </div>
-                    </div>
-                    <span className="text-xs text-muted-foreground shrink-0">{format(new Date(u.updatedAt), 'yyyy/MM/dd')}</span>
-                  </button>
-                ))}
-                {!showAllMeasurements && allMeasurementUpdates.length > 5 && (
-                  <button
-                    onClick={() => setShowAllMeasurements(true)}
-                    className="w-full flex items-center justify-center gap-1.5 py-3 text-sm text-primary font-bold hover:bg-muted/30 transition-colors border-t border-border"
-                  >
-                    {t('showMore')} ({allMeasurementUpdates.length - 5})
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      ) : (
+        <>
+          {/* Profiles section header */}
+          <div className="flex items-center justify-between mt-8 mb-2">
+            <h2 className="text-2xl font-display font-bold text-primary flex items-center gap-2">
+              <div className="w-2 h-6 bg-accent rounded-full" />
+              {t('measurementProfiles')}
+            </h2>
+            <ProfileCreateDialog customerId={customer.id} t={t} />
+          </div>
+
+          {/* Profile selector dropdown */}
+          {(() => {
+            const mainProfiles = customer.profiles.filter((p: any) => !p.isProof);
+            const activeProfile = mainProfiles.find((p: any) => p.id === selectedProfileId) ?? mainProfiles[0];
+            return (
+              <>
+                {mainProfiles.length > 1 && (
+                  <div className="flex items-center gap-3 mb-4">
+                    <label className="text-sm font-bold text-muted-foreground whitespace-nowrap">{t('selectProfile')}:</label>
+                    <Select
+                      value={selectedProfileId?.toString() ?? ''}
+                      onValueChange={(val) => setSelectedProfileId(parseInt(val))}
+                      dir={dir}
+                    >
+                      <SelectTrigger className="bg-white border-primary/20 rounded-xl shadow-sm max-w-xs font-bold">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent dir={dir}>
+                        {mainProfiles.map((p: any) => (
+                          <SelectItem key={p.id} value={p.id.toString()}>
+                            {p.name}
+                            {p.isMain && (
+                              <span className="text-[10px] bg-accent/20 text-accent-foreground px-1.5 py-0.5 rounded-full mr-1.5">{t('badgeMain')}</span>
+                            )}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+
+                {activeProfile && (
+                  <ProfileCard
+                    key={activeProfile.id}
+                    profile={activeProfile}
+                    customerId={customer.id}
+                    canEdit={canEdit}
+                    t={t}
+                  />
+                )}
+              </>
+            );
+          })()}
+
+          {/* Measurement Updates */}
+          <div>
+            <h2 className="text-2xl font-display font-bold text-primary flex items-center gap-2 mb-4">
+              <div className="w-2 h-6 bg-primary/40 rounded-full" />
+              <Clock className="w-5 h-5" />
+              {t('recentMeasurementUpdates')}
+            </h2>
+            <Card className="border-0 shadow-lg rounded-2xl overflow-hidden">
+              <CardContent className="p-0">
+                {!filteredMeasurements ? (
+                  <div className="flex justify-center p-6"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+                ) : filteredMeasurements.length === 0 ? (
+                  <div className="flex flex-col items-center gap-2 p-8 text-muted-foreground">
+                    <Ruler className="w-6 h-6 opacity-40" />
+                    <p className="text-sm">{t('noMeasurementUpdates')}</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-border">
+                    {filteredMeasurements.map((u: any) => (
+                      <button
+                        key={u.profileId}
+                        onClick={() => setMeasurementPopup(u)}
+                        className="w-full flex items-center gap-4 px-5 py-3 hover:bg-muted/30 active:bg-muted/50 transition-colors cursor-pointer text-start"
+                      >
+                        <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                          <Ruler className="w-4 h-4 text-primary" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-sm truncate">{u.profileName}</p>
+                          <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground mt-0.5">
+                            {[
+                              { k: t('mLength'), v: u.length },
+                              { k: t('mShoulder'), v: u.shoulder },
+                              { k: t('mChest'), v: u.chest },
+                              { k: t('mSleeve'), v: u.sleeve },
+                              { k: t('mNeck'), v: u.neck },
+                            ].filter(f => f.v != null).map(f => (
+                              <span key={f.k}><span className="text-muted-foreground/60">{f.k}:</span> <span className="font-medium text-foreground">{f.v}</span></span>
+                            ))}
+                          </div>
+                        </div>
+                        <span className="text-xs text-muted-foreground shrink-0">{format(new Date(u.updatedAt), 'yyyy/MM/dd')}</span>
+                      </button>
+                    ))}
+                    {!showAllMeasurements && allMeasurementUpdates.length > 5 && (
+                      <button
+                        onClick={() => setShowAllMeasurements(true)}
+                        className="w-full flex items-center justify-center gap-1.5 py-3 text-sm text-primary font-bold hover:bg-muted/30 transition-colors border-t border-border"
+                      >
+                        {t('showMore')} ({allMeasurementUpdates.length - 5})
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </>
+      )}
 
       {/* Measurement detail popup */}
       <Dialog open={!!measurementPopup} onOpenChange={(open) => { if (!open) setMeasurementPopup(null); }}>

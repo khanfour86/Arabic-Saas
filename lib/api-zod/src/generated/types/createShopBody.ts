@@ -19,4 +19,5 @@ export interface CreateShopBody {
   notes?: string | null;
   managerUsername: string;
   managerPassword: string;
+  plan?: string;
 }

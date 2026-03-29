@@ -41,15 +41,32 @@ artifacts-monorepo/
 ## Database Schema
 
 Tables in PostgreSQL:
-- `shops` — tailoring shop records (name, area, subscription status/dates, manager name, phone)
+- `shops` — tailoring shop records (name, area, subscription status/dates, manager name, phone, **plan**)
+  - `plan` column: `'light'` | `'premium'` (default `'premium'`)
+  - `subscriptionStatus`: `'active'` | `'expired'` | `'suspended'` (English values)
 - `users` — platform users with roles: `owner`, `shop_manager`, `reception`, `tailor`
 - `customers` — shop customers (linked to shopId)
 - `profiles` — measurement profiles per customer (a customer can have multiple, one is main)
 - `measurements` — body measurements per profile (length, shoulder, chest, sleeve, neck + notes)
 - `measurement_history` — historical snapshots of measurements saved before each update
 - `invoices` — orders (linked to shop + customer, has status: under_tailoring/ready/delivered)
+  - `bookNumber` and `pageNumber` columns added (nullable) for light plan invoice identification
 - `invoice_history` — audit log of invoice edits (stored as JSON diff per edit)
 - `sub_orders` — individual garment items per invoice (with fabric info, price, paid amount, status)
+
+## Two-Tier Subscription Plans
+
+### Light Plan (`plan = 'light'`) — خفيف
+- **No measurements**: Customer detail page skips the profiles/measurements section
+- **Book-based invoices**: Invoice creation shows `bookNumber` + `pageNumber` fields (no profile selector, no fabric source)
+- **Backend**: Detects light plan when `subOrders` is absent in POST body; auto-creates sub-order using customer's main profile
+- **Customer detail**: Shows "سجل الفواتير السابقة" (invoice history) instead of measurements
+- **Add customer button**: Shows "حفظ العميل" (Save Customer) instead of "حفظ ومتابعة للقياسات"
+- **WhatsApp message**: Includes book/page reference when present
+
+### Premium Plan (`plan = 'premium'`) — مميز (default)
+- **Full system**: Profile selector, fabric source, measurements, sub-orders
+- **Standard invoice flow**: Profile selector + quantity + fabric + price fields
 
 ## Authentication
 
