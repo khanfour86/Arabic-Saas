@@ -13,7 +13,7 @@ const API_BASE_URL =
   (typeof import.meta !== "undefined" &&
     (import.meta as ImportMeta & { env?: Record<string, string> }).env
       ?.VITE_API_URL) ||
-  "https://workspaceapi-server-production-4a42.up.railway.app";
+  "";
 
 function isRequest(input: RequestInfo | URL): input is Request {
   return typeof Request !== "undefined" && input instanceof Request;
