@@ -160,10 +160,9 @@ export function InvoiceCreate() {
                   </label>
                   <Input
                     type="text"
-                    inputMode="numeric"
                     value={bookNumber}
                     placeholder={t('enterBookNumber')}
-                    onChange={(e) => setBookNumber(toEnglishDigits(e.target.value))}
+                    onChange={(e) => setBookNumber(e.target.value)}
                     className={`h-14 bg-muted/50 rounded-xl text-center text-lg font-bold ${!bookNumber.trim() ? 'border-destructive/40' : ''}`}
                   />
                 </div>
@@ -172,10 +171,9 @@ export function InvoiceCreate() {
                   <label className="text-sm font-bold">{t('pageNumberLabel')}</label>
                   <Input
                     type="text"
-                    inputMode="numeric"
                     value={pageNumber}
                     placeholder={t('enterPageNumber')}
-                    onChange={(e) => setPageNumber(toEnglishDigits(e.target.value))}
+                    onChange={(e) => setPageNumber(e.target.value)}
                     className="h-14 bg-muted/50 rounded-xl text-center text-lg font-bold"
                   />
                 </div>
