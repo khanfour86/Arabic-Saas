@@ -322,7 +322,7 @@ const translations = {
     lightPageRef: 'صفحة',
     // VIP
     vipLabel: 'عميل VIP',
-    vipToggle: 'تمييز كعميل VIP',
+    vipToggle: 'عميل VIP',
     vipActive: 'VIP',
     // Workflow Stages
     stageCutting: 'قصاص',
@@ -695,7 +695,7 @@ const translations = {
     lightPageRef: 'Page',
     // VIP
     vipLabel: 'VIP Customer',
-    vipToggle: 'Mark as VIP Customer',
+    vipToggle: 'VIP Customer',
     vipActive: 'VIP',
     // Workflow Stages
     stageCutting: 'Cutting',
