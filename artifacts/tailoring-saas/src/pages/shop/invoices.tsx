@@ -263,6 +263,12 @@ export function InvoiceDetail() {
                         <span className="bg-muted px-2 py-1 rounded-md">{t('qty')} {sub.quantity}</span>
                         <span className="bg-muted px-2 py-1 rounded-md">{sub.fabricSource === 'shop_fabric' ? t('shopFabric') : t('customerFabric')}</span>
                         {sub.fabricDescription && <span>{sub.fabricDescription}</span>}
+                        {inv.bookNumber && (
+                          <span className="bg-sky-100 text-sky-700 px-2 py-1 rounded-md font-medium">
+                            {t('lightBookRef')} {inv.bookNumber}
+                            {inv.pageNumber ? ` / ${t('lightPageRef')} ${inv.pageNumber}` : ''}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
