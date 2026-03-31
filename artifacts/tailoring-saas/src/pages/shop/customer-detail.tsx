@@ -706,7 +706,8 @@ export function CustomerDetail() {
         </DialogContent>
       </Dialog>
 
-      {/* Recent Invoices */}
+      {/* Recent Invoices — premium only */}
+      {!isLightPlan && (
       <div>
         <h2 className="text-2xl font-display font-bold text-primary flex items-center gap-2 mb-4">
           <div className="w-2 h-6 bg-accent/60 rounded-full" />
@@ -762,6 +763,7 @@ export function CustomerDetail() {
           </CardContent>
         </Card>
       </div>
+      )}
     </div>
   );
 }
