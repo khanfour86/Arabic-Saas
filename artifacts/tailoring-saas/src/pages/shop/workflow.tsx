@@ -221,7 +221,7 @@ function WorkflowInvoiceRow({ inv, t }: { inv: any; t: (k: any) => string }) {
                 <span className="font-display font-bold text-primary">#{inv.invoiceNumber}</span>
                 {inv.bookNumber && (
                   <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
-                    {t('lightBookRef')} {inv.bookNumber}
+                    {t('lightBookRef')} {inv.bookNumber} · #{inv.invoiceNumber}
                   </span>
                 )}
               </div>
