@@ -4,6 +4,16 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Loader2, CheckCircle, Scissors, Ruler, StickyNote, Search, X, Clock, AlertCircle } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
@@ -66,6 +76,7 @@ export function TailorQueue() {
 
 function CurrentOrdersTab({ t }: { t: (k: any) => string }) {
   const [search, setSearch] = useState('');
+  const [confirmInvoiceId, setConfirmInvoiceId] = useState<number | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -84,6 +95,7 @@ function CurrentOrdersTab({ t }: { t: (k: any) => string }) {
         return r.json();
       }),
     onSuccess: (result) => {
+      setConfirmInvoiceId(null);
       queryClient.invalidateQueries({ queryKey: ['/api/shop/tailor-queue'] });
       queryClient.invalidateQueries({ queryKey: ['/api/shop/tailor-completed'] });
       queryClient.invalidateQueries({ queryKey: ['/api/shop/workflow'] });
@@ -94,6 +106,7 @@ function CurrentOrdersTab({ t }: { t: (k: any) => string }) {
       }
     },
     onError: (err: any) => {
+      setConfirmInvoiceId(null);
       toast({ title: err.message || 'خطأ', variant: 'destructive' });
     },
   });
@@ -157,13 +170,50 @@ function CurrentOrdersTab({ t }: { t: (k: any) => string }) {
               key={item.invoiceId}
               item={item}
               plan={plan}
-              onComplete={() => completeStageMutation.mutate(item.invoiceId)}
+              onComplete={() => setConfirmInvoiceId(item.invoiceId)}
               isCompleting={completeStageMutation.isPending && completeStageMutation.variables === item.invoiceId}
               t={t}
             />
           ))}
         </div>
       )}
+
+      {/* Confirmation dialog before completing a stage */}
+      <AlertDialog
+        open={confirmInvoiceId !== null}
+        onOpenChange={(open) => { if (!open && !completeStageMutation.isPending) setConfirmInvoiceId(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-right">{t('tailorConfirmTitle')}</AlertDialogTitle>
+            <AlertDialogDescription className="text-right sr-only">
+              {t('tailorConfirmTitle')}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-row-reverse gap-2 sm:flex-row-reverse">
+            <AlertDialogAction
+              className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold"
+              disabled={completeStageMutation.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                if (confirmInvoiceId !== null) {
+                  completeStageMutation.mutate(confirmInvoiceId);
+                }
+              }}
+            >
+              {completeStageMutation.isPending
+                ? <Loader2 className="w-4 h-4 animate-spin" />
+                : t('tailorConfirmYes')}
+            </AlertDialogAction>
+            <AlertDialogCancel
+              disabled={completeStageMutation.isPending}
+              onClick={() => setConfirmInvoiceId(null)}
+            >
+              {t('tailorConfirmCancel')}
+            </AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

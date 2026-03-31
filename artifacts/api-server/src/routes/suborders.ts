@@ -73,6 +73,11 @@ router.post("/shop/suborders", isManagerOrReception, requireActiveShop, async (r
     return;
   }
 
+  if (invoice.status === 'ready' || invoice.status === 'delivered') {
+    res.status(409).json({ error: "لا يمكن إضافة أو تعديل طلب فرعي بعد أن أصبحت الفاتورة جاهزة أو تم تسليمها" });
+    return;
+  }
+
   // Validate profileId belongs to the invoice's customer AND this shop
   try {
     await validateProfileOwnership(user.shopId!, invoice.customerId, profileId);
@@ -118,6 +123,16 @@ router.patch("/shop/suborders/:subOrderId", isShopUser, requireActiveShop, async
 
   if (!existing) {
     res.status(404).json({ error: "الطلب الفرعي غير موجود" });
+    return;
+  }
+
+  // Block edit if the parent invoice is already ready or delivered
+  const [parentInvoice] = await db.select({ status: invoicesTable.status })
+    .from(invoicesTable)
+    .where(eq(invoicesTable.id, existing.invoiceId));
+
+  if (parentInvoice?.status === 'ready' || parentInvoice?.status === 'delivered') {
+    res.status(409).json({ error: "لا يمكن إضافة أو تعديل طلب فرعي بعد أن أصبحت الفاتورة جاهزة أو تم تسليمها" });
     return;
   }
 

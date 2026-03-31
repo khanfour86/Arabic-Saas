@@ -364,6 +364,9 @@ const translations = {
     tailorCompletedSuccess: 'تم الإنهاء وانتقل الطلب للمرحلة التالية',
     tailorLastStageSuccess: 'تم الإنهاء — الطلب جاهز للتسليم!',
     tailorNoRoles: 'لم يتم تحديد دور لك بعد. يرجى التواصل مع مدير المحل.',
+    tailorConfirmTitle: 'هل أنت متأكد من إنهاء هذه المرحلة؟',
+    tailorConfirmYes: 'نعم، إنهاء',
+    tailorConfirmCancel: 'إلغاء',
     // Settings - User Management
     jobLabel: 'الوظيفة',
     jobReception: 'استقبال',
@@ -737,6 +740,9 @@ const translations = {
     tailorCompletedSuccess: 'Done — order moved to next stage',
     tailorLastStageSuccess: 'Done — order is ready for delivery!',
     tailorNoRoles: 'No role assigned yet. Please contact your shop manager.',
+    tailorConfirmTitle: 'Are you sure you want to complete this stage?',
+    tailorConfirmYes: 'Yes, Complete',
+    tailorConfirmCancel: 'Cancel',
     // Settings - User Management
     jobLabel: 'Job',
     jobReception: 'Reception',

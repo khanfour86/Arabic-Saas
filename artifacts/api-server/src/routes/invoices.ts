@@ -388,42 +388,68 @@ router.post("/shop/invoices/:invoiceId/complete-stage", requireAuth, requireShop
   }
 
   const activeStages = await getActiveStages(user.shopId!);
-  const nextStage = getNextStage(invoice.currentStage, activeStages);
+  // Capture the stage we expect to complete BEFORE entering the transaction
+  const expectedStage = invoice.currentStage!;
+  const nextStage = getNextStage(expectedStage, activeStages);
 
-  // All DB writes are atomic: stage_history + invoice update + suborders update
-  // Either everything commits or everything rolls back — no partial states
-  const { updated, isReady } = await db.transaction(async (tx) => {
-    await tx.insert(stageHistoryTable).values({
-      invoiceId: invoice.id,
-      shopId: user.shopId!,
-      stage: invoice.currentStage!,
-      completedBy: user.id,
-      nextStage: nextStage ?? null,
-    });
+  // All DB writes are atomic + protected against concurrent double-submission:
+  //   - Row lock (FOR UPDATE) re-fetches the invoice inside the transaction
+  //   - If currentStage changed since our pre-check → abort with clear error
+  //   - This prevents the same stage being recorded twice under any concurrency
+  let transactionResult: { updated: any; isReady: boolean };
+  try {
+    transactionResult = await db.transaction(async (tx) => {
+      // Lock the invoice row to block concurrent complete-stage calls
+      const [locked] = await tx.select()
+        .from(invoicesTable)
+        .where(and(eq(invoicesTable.shopId, user.shopId!), eq(invoicesTable.id, id)))
+        .for('update');
 
-    if (nextStage) {
+      // If another request already advanced the stage, abort
+      if (!locked || locked.currentStage !== expectedStage) {
+        const err: any = new Error("تم إنهاء هذه المرحلة مسبقاً");
+        err.code = 'STAGE_ALREADY_COMPLETED';
+        throw err;
+      }
+
+      await tx.insert(stageHistoryTable).values({
+        invoiceId: invoice.id,
+        shopId: user.shopId!,
+        stage: expectedStage,
+        completedBy: user.id,
+        nextStage: nextStage ?? null,
+      });
+
+      if (nextStage) {
+        const [upd] = await tx.update(invoicesTable)
+          .set({ currentStage: nextStage })
+          .where(eq(invoicesTable.id, id))
+          .returning();
+        return { updated: upd, isReady: false };
+      }
+
+      // Last stage — mark invoice ready + all suborders ready atomically
       const [upd] = await tx.update(invoicesTable)
-        .set({ currentStage: nextStage })
+        .set({ currentStage: null, status: 'ready', allSubOrdersReady: true })
         .where(eq(invoicesTable.id, id))
         .returning();
-      return { updated: upd, isReady: false };
+
+      await tx.update(subOrdersTable)
+        .set({ status: 'ready' })
+        .where(and(eq(subOrdersTable.shopId, user.shopId!), eq(subOrdersTable.invoiceId, id)));
+
+      return { updated: upd, isReady: true };
+    });
+  } catch (err: any) {
+    if (err.code === 'STAGE_ALREADY_COMPLETED') {
+      res.status(409).json({ error: err.message });
+      return;
     }
+    throw err;
+  }
 
-    // Last stage — mark invoice ready + all suborders ready atomically
-    const [upd] = await tx.update(invoicesTable)
-      .set({ currentStage: null, status: 'ready', allSubOrdersReady: true })
-      .where(eq(invoicesTable.id, id))
-      .returning();
-
-    await tx.update(subOrdersTable)
-      .set({ status: 'ready' })
-      .where(and(eq(subOrdersTable.shopId, user.shopId!), eq(subOrdersTable.invoiceId, id)));
-
-    return { updated: upd, isReady: true };
-  });
-
-  const result = await buildInvoiceResponse(user.shopId!, updated);
-  res.json({ ...result, moved: !isReady, nextStage: nextStage ?? null, isReady });
+  const result = await buildInvoiceResponse(user.shopId!, transactionResult.updated);
+  res.json({ ...result, moved: !transactionResult.isReady, nextStage: nextStage ?? null, isReady: transactionResult.isReady });
 });
 
 router.patch("/shop/invoices/:invoiceId", isManagerOrReception, requireActiveShop, async (req, res): Promise<void> => {
