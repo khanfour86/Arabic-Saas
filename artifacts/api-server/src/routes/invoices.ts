@@ -133,6 +133,7 @@ router.get("/shop/invoices", isShopUser, async (req, res): Promise<void> => {
       invoiceNumber: inv.invoiceNumber,
       customerName: customer?.name ?? "غير معروف",
       customerPhone: customer?.phone ?? "",
+      customerIsVip: customer?.isVip ?? false,
       status: inv.status,
       currentStage: inv.currentStage ?? null,
       totalAmount,
