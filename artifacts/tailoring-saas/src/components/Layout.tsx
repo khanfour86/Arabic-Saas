@@ -35,7 +35,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
           { href: '/shop/customers', label: t('navCustomers'), icon: Users },
           { href: '/shop/invoices', label: t('navInvoices'), icon: FileText },
           { href: '/shop/workflow', label: t('navWorkflow'), icon: GitBranch },
-          { href: '/shop/tailor', label: t('navTailor'), icon: Scissors },
           { href: '/shop/settings', label: t('navSettings'), icon: Settings },
         ];
       case 'reception':
