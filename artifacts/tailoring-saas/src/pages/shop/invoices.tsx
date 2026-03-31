@@ -85,7 +85,7 @@ export function InvoicesList() {
         <div className="grid grid-cols-1 gap-4">
           {data?.invoices.map(inv => (
             <Link key={inv.id} href={`/shop/invoices/${inv.id}`}>
-              <Card className="hover-elevate cursor-pointer border-0 shadow-md hover:shadow-xl transition-all rounded-2xl overflow-hidden group">
+              <Card className={`hover-elevate cursor-pointer shadow-md hover:shadow-xl transition-all rounded-2xl overflow-hidden group ${inv.customerIsVip ? 'border-2 border-red-500 shadow-red-200' : 'border-0'}`}>
                 <div className={`w-2 h-full absolute right-0 top-0 ${
                   inv.status === 'ready' ? 'bg-emerald-400' :
                   inv.status === 'delivered' ? 'bg-blue-400' :
@@ -97,8 +97,11 @@ export function InvoicesList() {
                       <FileText className="w-7 h-7 text-primary" />
                     </div>
                     <div>
-                      <div className="flex items-center gap-3 mb-1">
+                      <div className="flex items-center gap-3 mb-1 flex-wrap">
                         <h3 className="font-bold text-xl font-display">#{inv.invoiceNumber}</h3>
+                        {inv.customerIsVip && (
+                          <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">⭐ VIP</span>
+                        )}
                         <Badge variant="outline" className={`border-0 ${
                           inv.status === 'ready' ? 'bg-emerald-100 text-emerald-700' :
                           inv.status === 'delivered' ? 'bg-blue-100 text-blue-700' :

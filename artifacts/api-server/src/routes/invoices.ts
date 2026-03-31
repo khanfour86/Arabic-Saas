@@ -66,6 +66,7 @@ async function buildInvoiceResponse(shopId: number, invoice: any) {
     invoiceNumber: invoice.invoiceNumber,
     customerName: customer?.name ?? "غير معروف",
     customerPhone: customer?.phone ?? "",
+    customerIsVip: customer?.isVip ?? false,
     status: invoice.status,
     currentStage: invoice.currentStage ?? null,
     totalAmount,
