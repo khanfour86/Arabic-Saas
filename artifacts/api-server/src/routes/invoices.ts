@@ -5,6 +5,7 @@ import { type AuthUser } from "../lib/auth";
 import { isShopUser, isManagerOrReception, requireActiveShop } from "../lib/shopMiddleware";
 import { requireAuth, requireShopRole } from "../lib/auth";
 import { getActiveStages, getNextStage } from "../lib/stageHelpers";
+import { validateProfileOwnership } from "../lib/profileValidation";
 
 const router: IRouter = Router();
 
@@ -250,6 +251,17 @@ router.post("/shop/invoices", isManagerOrReception, requireActiveShop, async (re
   if (firstPaid > firstPrice) {
     res.status(400).json({ error: "المبلغ المدفوع لا يمكن أن يتجاوز السعر الإجمالي" });
     return;
+  }
+
+  // Validate all profileIds before inserting anything
+  for (let i = 0; i < subOrders.length; i++) {
+    const so = subOrders[i];
+    try {
+      await validateProfileOwnership(user.shopId!, customerId, so.profileId);
+    } catch (err: any) {
+      res.status(err.statusCode ?? 400).json({ error: `الطلب الفرعي ${i + 1}: ${err.message}` });
+      return;
+    }
   }
 
   const invoiceNumber = await generateInvoiceNumber(user.shopId!);

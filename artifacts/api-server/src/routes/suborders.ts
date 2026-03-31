@@ -2,21 +2,25 @@ import { Router, type IRouter } from "express";
 import { db, subOrdersTable, invoicesTable, profilesTable, measurementsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { type AuthUser } from "../lib/auth";
-import { isShopUser, isTailor, isManagerOrReception, requireActiveShop } from "../lib/shopMiddleware";
+import { isShopUser, isManagerOrReception, requireActiveShop } from "../lib/shopMiddleware";
+import { validateProfileOwnership } from "../lib/profileValidation";
 
 const router: IRouter = Router();
 
-async function checkAndUpdateInvoiceReadiness(shopId: number, invoiceId: number) {
+/**
+ * Updates only the allSubOrdersReady flag on the invoice.
+ * Does NOT change invoice.status — that is exclusively managed by the workflow
+ * stage system (complete-stage endpoint). This prevents legacy sub-order
+ * readiness from bypassing the stage progression.
+ */
+async function syncSubOrdersReadyFlag(shopId: number, invoiceId: number) {
   const subOrders = await db.select().from(subOrdersTable)
     .where(and(eq(subOrdersTable.shopId, shopId), eq(subOrdersTable.invoiceId, invoiceId)));
 
   const allReady = subOrders.length > 0 && subOrders.every(so => so.status === "ready");
 
   await db.update(invoicesTable)
-    .set({
-      allSubOrdersReady: allReady,
-      status: allReady ? "ready" : "under_tailoring",
-    })
+    .set({ allSubOrdersReady: allReady })
     .where(eq(invoicesTable.id, invoiceId));
 }
 
@@ -69,6 +73,14 @@ router.post("/shop/suborders", isManagerOrReception, requireActiveShop, async (r
     return;
   }
 
+  // Validate profileId belongs to the invoice's customer AND this shop
+  try {
+    await validateProfileOwnership(user.shopId!, invoice.customerId, profileId);
+  } catch (err: any) {
+    res.status(err.statusCode ?? 400).json({ error: err.message });
+    return;
+  }
+
   const so = await db.transaction(async (tx) => {
     const existingSubOrders = await tx
       .select({ id: subOrdersTable.id })
@@ -92,7 +104,7 @@ router.post("/shop/suborders", isManagerOrReception, requireActiveShop, async (r
     return inserted;
   });
 
-  await checkAndUpdateInvoiceReadiness(user.shopId!, invoiceId);
+  await syncSubOrdersReadyFlag(user.shopId!, invoiceId);
   const result = await buildSubOrderResponse(so);
   res.status(201).json(result);
 });
@@ -118,28 +130,6 @@ router.patch("/shop/suborders/:subOrderId", isShopUser, requireActiveShop, async
   if (req.body.notes !== undefined) updateData.notes = req.body.notes;
 
   const [so] = await db.update(subOrdersTable).set(updateData).where(eq(subOrdersTable.id, id)).returning();
-  const result = await buildSubOrderResponse(so);
-  res.json(result);
-});
-
-router.post("/shop/suborders/:subOrderId/ready", isTailor, async (req, res): Promise<void> => {
-  const user = (req as any).user as AuthUser;
-  const id = parseInt(Array.isArray(req.params.subOrderId) ? req.params.subOrderId[0] : req.params.subOrderId, 10);
-
-  const [existing] = await db.select().from(subOrdersTable)
-    .where(and(eq(subOrdersTable.shopId, user.shopId!), eq(subOrdersTable.id, id)));
-
-  if (!existing) {
-    res.status(404).json({ error: "الطلب الفرعي غير موجود" });
-    return;
-  }
-
-  const [so] = await db.update(subOrdersTable)
-    .set({ status: "ready" })
-    .where(eq(subOrdersTable.id, id))
-    .returning();
-
-  await checkAndUpdateInvoiceReadiness(user.shopId!, so.invoiceId);
   const result = await buildSubOrderResponse(so);
   res.json(result);
 });
