@@ -12,6 +12,33 @@ import { Users, Download, Plus, Trash2, Loader2, Database, Pencil } from 'lucide
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 
+const TAILOR_STAGES = [
+  { key: 'cutting', labelKey: 'stageCutting' as const },
+  { key: 'assembly', labelKey: 'stageAssembly' as const },
+  { key: 'finishing', labelKey: 'stageFinishing' as const },
+  { key: 'ironing', labelKey: 'stageIroning' as const },
+];
+
+function StageBadge({ stage, t }: { stage: string; t: (k: any) => string }) {
+  const map: Record<string, string> = {
+    cutting: t('stageCutting'),
+    assembly: t('stageAssembly'),
+    finishing: t('stageFinishing'),
+    ironing: t('stageIroning'),
+  };
+  const colors: Record<string, string> = {
+    cutting: 'bg-blue-100 text-blue-700',
+    assembly: 'bg-purple-100 text-purple-700',
+    finishing: 'bg-amber-100 text-amber-700',
+    ironing: 'bg-orange-100 text-orange-700',
+  };
+  return (
+    <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${colors[stage] ?? 'bg-muted text-muted-foreground'}`}>
+      {map[stage] ?? stage}
+    </span>
+  );
+}
+
 export function ShopSettings() {
   const { t } = useTranslation();
   return (
@@ -64,16 +91,21 @@ function UsersSection() {
           <div className="p-12 flex justify-center"><Loader2 className="w-6 h-6 animate-spin" /></div>
         ) : (
           <div className="divide-y">
-            {data?.users.map(u => (
-              <div key={u.id} className="p-5 flex items-center justify-between hover:bg-muted/30 transition-colors">
-                <div>
+            {data?.users.map((u: any) => (
+              <div key={u.id} className="p-5 flex items-start justify-between hover:bg-muted/30 transition-colors gap-3">
+                <div className="min-w-0 flex-1">
                   <h4 className="font-bold text-lg">{u.name}</h4>
                   <div className="text-sm text-muted-foreground" dir="ltr">{u.username}</div>
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    <Badge variant="outline" className="rounded-full px-3 py-1">
+                      {u.role === 'shop_manager' ? t('roleBadgeManager') : u.role === 'reception' ? t('roleBadgeReception') : t('roleBadgeTailor')}
+                    </Badge>
+                    {u.role === 'tailor' && Array.isArray(u.tailorRoles) && u.tailorRoles.map((r: string) => (
+                      <StageBadge key={r} stage={r} t={t} />
+                    ))}
+                  </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <Badge variant="outline" className="rounded-full px-3 py-1">
-                    {u.role === 'shop_manager' ? t('roleBadgeManager') : u.role === 'reception' ? t('roleBadgeReception') : t('roleBadgeTailor')}
-                  </Badge>
+                <div className="flex items-center gap-2 shrink-0">
                   <UserEditDialog user={u} />
                   {u.role !== 'shop_manager' && (
                     <Button
@@ -97,9 +129,56 @@ function UsersSection() {
   );
 }
 
+function TailorRolesCheckboxes({ selected, onChange, t }: {
+  selected: string[];
+  onChange: (roles: string[]) => void;
+  t: (k: any) => string;
+}) {
+  const toggle = (key: string) => {
+    if (selected.includes(key)) {
+      onChange(selected.filter(r => r !== key));
+    } else {
+      onChange([...selected, key]);
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <label className="text-sm font-bold">{t('tailorRolesLabel')}</label>
+      <p className="text-xs text-muted-foreground">{t('tailorRolesHint')}</p>
+      <div className="grid grid-cols-2 gap-2">
+        {TAILOR_STAGES.map(({ key, labelKey }) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => toggle(key)}
+            className={`flex items-center gap-2 p-3 rounded-xl border-2 text-sm font-bold transition-all text-start ${
+              selected.includes(key)
+                ? 'border-primary bg-primary/10 text-primary'
+                : 'border-border bg-muted/30 text-muted-foreground hover:border-primary/40'
+            }`}
+          >
+            <div className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 ${
+              selected.includes(key) ? 'border-primary bg-primary' : 'border-muted-foreground'
+            }`}>
+              {selected.includes(key) && (
+                <svg viewBox="0 0 10 8" className="w-3 h-3 fill-white">
+                  <path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              )}
+            </div>
+            {t(labelKey)}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function UserEditDialog({ user }: { user: any }) {
   const [open, setOpen] = useState(false);
-  const [role, setRole] = useState(user.role);
+  const [job, setJob] = useState<'reception' | 'tailor'>(user.role === 'tailor' ? 'tailor' : 'reception');
+  const [tailorRoles, setTailorRoles] = useState<string[]>(Array.isArray(user.tailorRoles) ? user.tailorRoles : []);
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { t, dir } = useTranslation();
@@ -118,20 +197,38 @@ function UserEditDialog({ user }: { user: any }) {
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
-    const data: any = { role };
     const name = fd.get('name') as string;
     const password = fd.get('password') as string;
+
     if (password && password.length < 6) {
       toast({ title: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل', variant: 'destructive' });
       return;
     }
+
+    if (job === 'tailor' && tailorRoles.length === 0) {
+      toast({ title: t('mustSelectRole'), variant: 'destructive' });
+      return;
+    }
+
+    const data: any = { role: job };
     if (name) data.name = name;
     if (password) data.password = password;
+    if (job === 'tailor') data.tailorRoles = tailorRoles;
+    else data.tailorRoles = [];
+
     mutation.mutate({ userId: user.id, data });
   };
 
+  const handleOpen = (o: boolean) => {
+    setOpen(o);
+    if (o) {
+      setJob(user.role === 'tailor' ? 'tailor' : 'reception');
+      setTailorRoles(Array.isArray(user.tailorRoles) ? user.tailorRoles : []);
+    }
+  };
+
   return (
-    <Dialog open={open} onOpenChange={(o) => { setOpen(o); setRole(user.role); }}>
+    <Dialog open={open} onOpenChange={handleOpen}>
       <DialogTrigger asChild>
         <Button variant="ghost" size="icon" className="text-primary hover:bg-primary/10">
           <Pencil className="w-4 h-4" />
@@ -156,16 +253,21 @@ function UserEditDialog({ user }: { user: any }) {
             <Input name="password" type="password" className="bg-muted/50 rounded-xl" dir="ltr" placeholder={t('leaveEmpty')} />
           </div>
           {user.role !== 'shop_manager' && (
-            <div className="space-y-2">
-              <label className="text-sm font-bold">{t('roleLabel')}</label>
-              <Select value={role} onValueChange={setRole}>
-                <SelectTrigger className="bg-muted/50 rounded-xl" dir={dir}><SelectValue /></SelectTrigger>
-                <SelectContent dir={dir}>
-                  <SelectItem value="reception">{t('roleBadgeReception')}</SelectItem>
-                  <SelectItem value="tailor">{t('roleBadgeTailor')}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            <>
+              <div className="space-y-2">
+                <label className="text-sm font-bold">{t('jobLabel')}</label>
+                <Select value={job} onValueChange={(v) => setJob(v as any)}>
+                  <SelectTrigger className="bg-muted/50 rounded-xl" dir={dir}><SelectValue /></SelectTrigger>
+                  <SelectContent dir={dir}>
+                    <SelectItem value="reception">{t('jobReception')}</SelectItem>
+                    <SelectItem value="tailor">{t('jobTailor')}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {job === 'tailor' && (
+                <TailorRolesCheckboxes selected={tailorRoles} onChange={setTailorRoles} t={t} />
+              )}
+            </>
           )}
           <Button type="submit" className="w-full h-12 rounded-xl mt-4" disabled={mutation.isPending}>
             {mutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : t('saveChanges')}
@@ -179,6 +281,8 @@ function UserEditDialog({ user }: { user: any }) {
 function UserCreateDialog() {
   const [open, setOpen] = useState(false);
   const [password, setPassword] = useState('');
+  const [job, setJob] = useState<'reception' | 'tailor'>('reception');
+  const [tailorRoles, setTailorRoles] = useState<string[]>([]);
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { t, dir } = useTranslation();
@@ -188,25 +292,45 @@ function UserCreateDialog() {
         queryClient.invalidateQueries({ queryKey: ['/api/shop/users'] });
         toast({ title: t('userAdded') });
         setOpen(false);
-      }
+      },
+      onError: (err: any) => {
+        const msg = err?.data?.error ?? err?.message ?? 'خطأ';
+        toast({ title: msg, variant: 'destructive' });
+      },
     }
   });
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
+
+    if (job === 'tailor' && tailorRoles.length === 0) {
+      toast({ title: t('mustSelectRole'), variant: 'destructive' });
+      return;
+    }
+
     mutation.mutate({
       data: {
         name: fd.get('name') as string,
         username: fd.get('username') as string,
         password,
-        role: fd.get('role') as any,
+        role: job as any,
+        tailorRoles: job === 'tailor' ? tailorRoles as any : undefined,
       }
     });
   };
 
+  const handleOpen = (o: boolean) => {
+    setOpen(o);
+    if (!o) {
+      setPassword('');
+      setJob('reception');
+      setTailorRoles([]);
+    }
+  };
+
   return (
-    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setPassword(''); }}>
+    <Dialog open={open} onOpenChange={handleOpen}>
       <DialogTrigger asChild>
         <Button className="rounded-xl gap-2 bg-primary text-white"><Plus className="w-4 h-4"/> {t('addUser')}</Button>
       </DialogTrigger>
@@ -239,16 +363,23 @@ function UserCreateDialog() {
             </p>
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-bold">{t('roleLabel')}</label>
-            <Select name="role" defaultValue="reception">
+            <label className="text-sm font-bold">{t('jobLabel')}</label>
+            <Select value={job} onValueChange={(v) => { setJob(v as any); setTailorRoles([]); }}>
               <SelectTrigger className="bg-muted/50 rounded-xl" dir={dir}><SelectValue /></SelectTrigger>
               <SelectContent dir={dir}>
-                <SelectItem value="reception">{t('roleBadgeReception')}</SelectItem>
-                <SelectItem value="tailor">{t('roleBadgeTailor')}</SelectItem>
+                <SelectItem value="reception">{t('jobReception')}</SelectItem>
+                <SelectItem value="tailor">{t('jobTailor')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
-          <Button type="submit" className="w-full h-12 rounded-xl mt-4" disabled={mutation.isPending || password.length < 6}>
+          {job === 'tailor' && (
+            <TailorRolesCheckboxes selected={tailorRoles} onChange={setTailorRoles} t={t} />
+          )}
+          <Button
+            type="submit"
+            className="w-full h-12 rounded-xl mt-4"
+            disabled={mutation.isPending || password.length < 6 || (job === 'tailor' && tailorRoles.length === 0)}
+          >
             {mutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : t('saveBtn')}
           </Button>
         </form>

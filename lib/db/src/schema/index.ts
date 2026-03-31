@@ -8,3 +8,4 @@ export * from "./invoices";
 export * from "./invoice_history";
 export * from "./suborders";
 export * from "./sessions";
+export * from "./stage_history";

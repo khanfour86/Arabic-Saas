@@ -45,14 +45,17 @@ Tables in PostgreSQL:
   - `plan` column: `'light'` | `'premium'` (default `'premium'`)
   - `subscriptionStatus`: `'active'` | `'expired'` | `'suspended'` (English values)
 - `users` — platform users with roles: `owner`, `shop_manager`, `reception`, `tailor`
+  - `tailorRoles text[]` — stages a tailor handles: any subset of `['cutting','assembly','finishing','ironing']`
 - `customers` — shop customers (linked to shopId)
 - `profiles` — measurement profiles per customer (a customer can have multiple, one is main)
 - `measurements` — body measurements per profile (length, shoulder, chest, sleeve, neck + notes)
 - `measurement_history` — historical snapshots of measurements saved before each update
 - `invoices` — orders (linked to shop + customer, has status: under_tailoring/ready/delivered)
   - `bookNumber` and `pageNumber` columns added (nullable) for light plan invoice identification
+  - `currentStage text` — active workflow stage (`cutting`/`assembly`/`finishing`/`ironing`/null)
 - `invoice_history` — audit log of invoice edits (stored as JSON diff per edit)
 - `sub_orders` — individual garment items per invoice (with fabric info, price, paid amount, status)
+- `stage_history` — records completed stages (invoiceId, shopId, stage, completedBy, completedAt, nextStage)
 
 ## Two-Tier Subscription Plans
 
@@ -111,11 +114,16 @@ All routes under `/api/`:
 
 ### Shop — Invoices (requires shop staff)
 - `GET /api/shop/invoices` (?status=, ?phone=, ?invoiceNumber=, ?readyForDelivery= filters)
-- `POST /api/shop/invoices` (creates invoice + sub-orders together; manager/reception only)
+- `POST /api/shop/invoices` (creates invoice + sub-orders; sets currentStage from active tailors)
 - `GET /api/shop/invoices/:invoiceId`
 - `PATCH /api/shop/invoices/:invoiceId`
 - `POST /api/shop/invoices/:invoiceId/deliver` (manager/reception only)
-- `GET /api/shop/invoices/:invoiceId/whatsapp` (generates Arabic WhatsApp message)
+- `POST /api/shop/invoices/:invoiceId/complete-stage` (tailor/manager) — advance stage, record in stage_history
+
+### Shop — Workflow & Tailor (requires shop staff)
+- `GET /api/shop/workflow` (manager only) — stage counts + invoice list with ?stage=, ?invoiceNumber= filters
+- `GET /api/shop/tailor-queue` (tailor/manager) — invoices at tailor's assigned stages; returns myRoles, plan, items
+- `GET /api/shop/tailor-completed` (tailor/manager) — stage_history entries completed by this user
 
 ### Shop — Sub-orders
 - `POST /api/shop/suborders` (manager/reception only)

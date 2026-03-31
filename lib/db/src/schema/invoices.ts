@@ -10,6 +10,7 @@ export const invoicesTable = pgTable("invoices", {
   customerId: integer("customer_id").notNull().references(() => customersTable.id),
   invoiceNumber: text("invoice_number").notNull(),
   status: text("status").notNull().default("under_tailoring"),
+  currentStage: text("current_stage"),
   notes: text("notes"),
   allSubOrdersReady: boolean("all_sub_orders_ready").notNull().default(false),
   bookNumber: text("book_number"),

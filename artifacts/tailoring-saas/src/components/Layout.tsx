@@ -2,7 +2,7 @@ import React from 'react';
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@/lib/auth';
 import { useTranslation } from '@/lib/i18n';
-import { Home, Users, FileText, Settings, Scissors, LogOut, AlertTriangle } from 'lucide-react';
+import { Home, Users, FileText, Settings, Scissors, LogOut, AlertTriangle, GitBranch } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useQuery } from '@tanstack/react-query';
 
@@ -34,6 +34,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           { href: '/shop/dashboard', label: t('navHome'), icon: Home },
           { href: '/shop/customers', label: t('navCustomers'), icon: Users },
           { href: '/shop/invoices', label: t('navInvoices'), icon: FileText },
+          { href: '/shop/workflow', label: t('navWorkflow'), icon: GitBranch },
           { href: '/shop/tailor', label: t('navTailor'), icon: Scissors },
           { href: '/shop/settings', label: t('navSettings'), icon: Settings },
         ];

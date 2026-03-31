@@ -1,8 +1,10 @@
 import { Router, type IRouter } from "express";
-import { db, invoicesTable, subOrdersTable, customersTable, profilesTable, measurementsTable, shopsTable, invoiceHistoryTable } from "@workspace/db";
+import { db, invoicesTable, subOrdersTable, customersTable, profilesTable, measurementsTable, shopsTable, invoiceHistoryTable, stageHistoryTable, usersTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { type AuthUser } from "../lib/auth";
 import { isShopUser, isManagerOrReception, requireActiveShop } from "../lib/shopMiddleware";
+import { requireAuth, requireShopRole } from "../lib/auth";
+import { getActiveStages, getNextStage } from "../lib/stageHelpers";
 
 const router: IRouter = Router();
 
@@ -65,6 +67,7 @@ async function buildInvoiceResponse(shopId: number, invoice: any) {
     customerName: customer?.name ?? "غير معروف",
     customerPhone: customer?.phone ?? "",
     status: invoice.status,
+    currentStage: invoice.currentStage ?? null,
     totalAmount,
     paidAmount,
     remainingAmount: totalAmount - paidAmount,
@@ -130,6 +133,7 @@ router.get("/shop/invoices", isShopUser, async (req, res): Promise<void> => {
       customerName: customer?.name ?? "غير معروف",
       customerPhone: customer?.phone ?? "",
       status: inv.status,
+      currentStage: inv.currentStage ?? null,
       totalAmount,
       paidAmount,
       remainingAmount: totalAmount - paidAmount,
@@ -162,10 +166,13 @@ router.post("/shop/invoices", isManagerOrReception, requireActiveShop, async (re
     return;
   }
 
+  // Determine starting stage based on shop's active tailors
+  const activeStages = await getActiveStages(user.shopId!);
+  const startingStage = activeStages.length > 0 ? activeStages[0] : null;
+
   const isLightPlan = !subOrders || subOrders.length === 0;
 
   if (isLightPlan) {
-    // Light plan invoice creation
     const firstPrice = parseFloat(price) || 0;
     const firstPaid = parseFloat(paidAmount) || 0;
     if (firstPrice <= 0) {
@@ -181,7 +188,6 @@ router.post("/shop/invoices", isManagerOrReception, requireActiveShop, async (re
       return;
     }
 
-    // Find main profile for this customer
     const [mainProfile] = await db.select().from(profilesTable)
       .where(and(eq(profilesTable.shopId, user.shopId!), eq(profilesTable.customerId, customerId), eq(profilesTable.isMain, true)));
 
@@ -197,6 +203,7 @@ router.post("/shop/invoices", isManagerOrReception, requireActiveShop, async (re
       customerId,
       invoiceNumber,
       status: "under_tailoring",
+      currentStage: startingStage,
       notes: notes ?? null,
       bookNumber: bookNumber ? bookNumber.toString() : null,
       pageNumber: pageNumber ? pageNumber.toString() : null,
@@ -223,7 +230,7 @@ router.post("/shop/invoices", isManagerOrReception, requireActiveShop, async (re
     return;
   }
 
-  // Premium plan invoice creation
+  // Premium plan
   const firstPrice = parseFloat(subOrders[0].price) || 0;
   const firstPaid = parseFloat(subOrders[0].paidAmount) || 0;
   if (firstPrice <= 0) {
@@ -242,6 +249,7 @@ router.post("/shop/invoices", isManagerOrReception, requireActiveShop, async (re
     customerId,
     invoiceNumber,
     status: "under_tailoring",
+    currentStage: startingStage,
     notes: notes ?? null,
     allSubOrdersReady: false,
   }).returning();
@@ -282,6 +290,77 @@ router.get("/shop/invoices/:invoiceId", isShopUser, async (req, res): Promise<vo
 
   const result = await buildInvoiceResponse(user.shopId!, invoice);
   res.json(result);
+});
+
+// Complete Stage endpoint (Tailor presses "انتهاء")
+router.post("/shop/invoices/:invoiceId/complete-stage", requireAuth, requireShopRole("tailor", "shop_manager"), requireActiveShop, async (req, res): Promise<void> => {
+  const user = (req as any).user as AuthUser;
+  const id = parseInt(Array.isArray(req.params.invoiceId) ? req.params.invoiceId[0] : req.params.invoiceId, 10);
+
+  const [invoice] = await db.select().from(invoicesTable)
+    .where(and(eq(invoicesTable.shopId, user.shopId!), eq(invoicesTable.id, id)));
+
+  if (!invoice) {
+    res.status(404).json({ error: "الفاتورة غير موجودة" });
+    return;
+  }
+
+  if (!invoice.currentStage) {
+    res.status(400).json({ error: "هذه الفاتورة لا توجد لها مرحلة نشطة حالياً" });
+    return;
+  }
+
+  // Verify tailor has this stage in their roles (skip check for manager)
+  if (user.role === 'tailor') {
+    const [tailorUser] = await db.select({ tailorRoles: usersTable.tailorRoles })
+      .from(usersTable).where(eq(usersTable.id, user.id));
+
+    if (!tailorUser?.tailorRoles?.includes(invoice.currentStage)) {
+      res.status(403).json({ error: "ليس لديك صلاحية إنهاء هذه المرحلة" });
+      return;
+    }
+  }
+
+  const activeStages = await getActiveStages(user.shopId!);
+  const nextStage = getNextStage(invoice.currentStage, activeStages);
+
+  // Record in stage_history
+  await db.insert(stageHistoryTable).values({
+    invoiceId: invoice.id,
+    shopId: user.shopId!,
+    stage: invoice.currentStage,
+    completedBy: user.id,
+    nextStage: nextStage ?? null,
+  });
+
+  if (nextStage) {
+    // Move to next stage
+    const [updated] = await db.update(invoicesTable)
+      .set({ currentStage: nextStage })
+      .where(eq(invoicesTable.id, id))
+      .returning();
+
+    const result = await buildInvoiceResponse(user.shopId!, updated);
+    res.json({ ...result, moved: true, nextStage, isReady: false });
+  } else {
+    // Last stage — mark as ready
+    const [updated] = await db.update(invoicesTable)
+      .set({
+        currentStage: null,
+        status: 'ready',
+        allSubOrdersReady: true,
+      })
+      .where(eq(invoicesTable.id, id))
+      .returning();
+
+    // Also mark all sub_orders as ready
+    await db.update(subOrdersTable)
+      .set({ status: 'ready' })
+      .where(and(eq(subOrdersTable.shopId, user.shopId!), eq(subOrdersTable.invoiceId, id)));
+
+    const result = await buildInvoiceResponse(user.shopId!, updated);
+    res.json({ ...result, moved: false, nextStage: null, isReady: true });
+  }
 });
 
 router.patch("/shop/invoices/:invoiceId", isManagerOrReception, requireActiveShop, async (req, res): Promise<void> => {
@@ -382,7 +461,6 @@ router.get("/shop/invoices/:invoiceId/whatsapp", isManagerOrReception, async (re
   res.json({ message, phone, invoiceNumber: invoice.invoiceNumber, remainingAmount });
 });
 
-// GET /api/shop/invoices/:id/history
 router.get('/shop/invoices/:id/history', isShopUser, requireActiveShop, async (req, res) => {
   const user = req.user as AuthUser;
   const id = parseInt(req.params.id);
@@ -398,7 +476,6 @@ router.get('/shop/invoices/:id/history', isShopUser, requireActiveShop, async (r
   res.json(history);
 });
 
-// POST /api/shop/invoices/:id/history
 router.post('/shop/invoices/:id/history', isManagerOrReception, requireActiveShop, async (req, res) => {
   const user = req.user as AuthUser;
   const id = parseInt(req.params.id);

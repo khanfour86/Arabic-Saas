@@ -201,7 +201,7 @@ export function InvoiceDetail() {
                 {format(new Date(inv.createdAt), 'yyyy/MM/dd HH:mm')}
               </div>
               <h1 className="text-4xl font-display font-bold mb-2">{t('invoiceNum')}{inv.invoiceNumber}</h1>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
                 <Badge className={`border-0 px-3 py-1 text-sm ${
                   inv.status === 'ready' ? 'bg-emerald-400 text-emerald-950' :
                   inv.status === 'delivered' ? 'bg-blue-400 text-blue-950' :
@@ -209,6 +209,25 @@ export function InvoiceDetail() {
                 }`}>
                   {inv.status === 'ready' ? t('statusReadyDelivery') : inv.status === 'delivered' ? t('statusDeliveredFull') : t('underTailoring')}
                 </Badge>
+                {inv.status === 'under_tailoring' && inv.currentStage && (() => {
+                  const stageMap: Record<string, string> = {
+                    cutting: t('stageCutting'),
+                    assembly: t('stageAssembly'),
+                    finishing: t('stageFinishing'),
+                    ironing: t('stageIroning'),
+                  };
+                  const stageBgMap: Record<string, string> = {
+                    cutting: 'bg-blue-200/80 text-blue-900',
+                    assembly: 'bg-purple-200/80 text-purple-900',
+                    finishing: 'bg-amber-200/80 text-amber-900',
+                    ironing: 'bg-orange-200/80 text-orange-900',
+                  };
+                  return (
+                    <Badge className={`border-0 px-3 py-1 text-sm font-bold ${stageBgMap[inv.currentStage] ?? 'bg-white/30 text-primary'}`}>
+                      {stageMap[inv.currentStage] ?? inv.currentStage}
+                    </Badge>
+                  );
+                })()}
                 {inv.status === 'ready' && inv.allSubOrdersReady && (
                   <Badge className="bg-accent text-accent-foreground border-0">{t('allReady')}</Badge>
                 )}

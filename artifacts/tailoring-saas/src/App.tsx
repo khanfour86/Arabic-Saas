@@ -16,6 +16,7 @@ import { InvoiceCreate } from "./pages/shop/invoice-create";
 import { InvoiceEdit } from "./pages/shop/invoice-edit";
 import { TailorQueue } from "./pages/shop/tailor-queue";
 import { ShopSettings } from "./pages/shop/settings";
+import { WorkflowDashboard } from "./pages/shop/workflow";
 import { Loader2 } from "lucide-react";
 
 const queryClient = new QueryClient();
@@ -91,7 +92,12 @@ function AppContent() {
             
             {/* Tailor */}
             <Route path="/shop/tailor" component={TailorQueue} />
-            
+
+            {/* Workflow Dashboard (Manager only) */}
+            {user.role === 'shop_manager' && (
+              <Route path="/shop/workflow" component={WorkflowDashboard} />
+            )}
+
             {/* Settings (Manager only) */}
             {user.role === 'shop_manager' && (
               <Route path="/shop/settings" component={ShopSettings} />
