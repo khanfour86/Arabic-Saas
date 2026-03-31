@@ -207,34 +207,56 @@ router.post("/shop/invoices", isManagerOrReception, requireActiveShop, async (re
       return;
     }
 
+    // Invoice number generated OUTSIDE the transaction (read-only MAX query)
     const invoiceNumber = await generateInvoiceNumber(user.shopId!);
 
-    const [invoice] = await db.insert(invoicesTable).values({
-      shopId: user.shopId!,
-      customerId,
-      invoiceNumber,
-      status: "under_tailoring",
-      currentStage: startingStage,
-      notes: notes ?? null,
-      bookNumber: bookNumber ? bookNumber.toString() : null,
-      pageNumber: pageNumber ? pageNumber.toString() : null,
-      allSubOrdersReady: false,
-    }).returning();
+    // Atomic: invoice + suborder saved together or rolled back together
+    let invoice: any;
+    const MAX_RETRIES = 3;
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      const invNum = attempt === 0
+        ? invoiceNumber
+        : await generateInvoiceNumber(user.shopId!, attempt);
+      try {
+        invoice = await db.transaction(async (tx) => {
+          const [inv] = await tx.insert(invoicesTable).values({
+            shopId: user.shopId!,
+            customerId,
+            invoiceNumber: invNum,
+            status: "under_tailoring",
+            currentStage: startingStage,
+            notes: notes ?? null,
+            bookNumber: bookNumber ? bookNumber.toString() : null,
+            pageNumber: pageNumber ? pageNumber.toString() : null,
+            allSubOrdersReady: false,
+          }).returning();
 
-    const subOrderNumber = `${invoiceNumber}-1`;
-    await db.insert(subOrdersTable).values({
-      invoiceId: invoice.id,
-      shopId: user.shopId!,
-      profileId: mainProfile.id,
-      subOrderNumber,
-      quantity: parseInt(quantity, 10),
-      fabricSource: "shop_fabric",
-      fabricDescription: null,
-      price: firstPrice.toString(),
-      paidAmount: firstPaid.toString(),
-      notes: null,
-      status: "under_tailoring",
-    });
+          await tx.insert(subOrdersTable).values({
+            invoiceId: inv.id,
+            shopId: user.shopId!,
+            profileId: mainProfile.id,
+            subOrderNumber: `${invNum}-1`,
+            quantity: parseInt(quantity, 10),
+            fabricSource: "shop_fabric",
+            fabricDescription: null,
+            price: firstPrice.toString(),
+            paidAmount: firstPaid.toString(),
+            notes: null,
+            status: "under_tailoring",
+          });
+
+          return inv;
+        });
+        break;
+      } catch (err: any) {
+        if (isUniqueConstraintError(err) && attempt < MAX_RETRIES - 1) continue;
+        if (isUniqueConstraintError(err)) {
+          res.status(409).json({ error: "تعذّر توليد رقم فاتورة فريد، يرجى المحاولة مرة أخرى" });
+          return;
+        }
+        throw err;
+      }
+    }
 
     const result = await buildInvoiceResponse(user.shopId!, invoice);
     res.status(201).json(result);
@@ -253,7 +275,7 @@ router.post("/shop/invoices", isManagerOrReception, requireActiveShop, async (re
     return;
   }
 
-  // Validate all profileIds before inserting anything
+  // Validate all profileIds before any DB write
   for (let i = 0; i < subOrders.length; i++) {
     const so = subOrders[i];
     try {
@@ -264,34 +286,56 @@ router.post("/shop/invoices", isManagerOrReception, requireActiveShop, async (re
     }
   }
 
+  // Invoice number generated OUTSIDE the transaction (read-only MAX query)
   const invoiceNumber = await generateInvoiceNumber(user.shopId!);
 
-  const [invoice] = await db.insert(invoicesTable).values({
-    shopId: user.shopId!,
-    customerId,
-    invoiceNumber,
-    status: "under_tailoring",
-    currentStage: startingStage,
-    notes: notes ?? null,
-    allSubOrdersReady: false,
-  }).returning();
+  // Atomic: invoice + all suborders saved together or rolled back together
+  let invoice: any;
+  const MAX_RETRIES = 3;
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    const invNum = attempt === 0
+      ? invoiceNumber
+      : await generateInvoiceNumber(user.shopId!, attempt);
+    try {
+      invoice = await db.transaction(async (tx) => {
+        const [inv] = await tx.insert(invoicesTable).values({
+          shopId: user.shopId!,
+          customerId,
+          invoiceNumber: invNum,
+          status: "under_tailoring",
+          currentStage: startingStage,
+          notes: notes ?? null,
+          allSubOrdersReady: false,
+        }).returning();
 
-  for (let i = 0; i < subOrders.length; i++) {
-    const so = subOrders[i];
-    const subOrderNumber = `${invoiceNumber}-${i + 1}`;
-    await db.insert(subOrdersTable).values({
-      invoiceId: invoice.id,
-      shopId: user.shopId!,
-      profileId: so.profileId,
-      subOrderNumber,
-      quantity: so.quantity,
-      fabricSource: so.fabricSource,
-      fabricDescription: so.fabricDescription ?? null,
-      price: so.price.toString(),
-      paidAmount: so.paidAmount.toString(),
-      notes: so.notes ?? null,
-      status: "under_tailoring",
-    });
+        for (let i = 0; i < subOrders.length; i++) {
+          const so = subOrders[i];
+          await tx.insert(subOrdersTable).values({
+            invoiceId: inv.id,
+            shopId: user.shopId!,
+            profileId: so.profileId,
+            subOrderNumber: `${invNum}-${i + 1}`,
+            quantity: so.quantity,
+            fabricSource: so.fabricSource,
+            fabricDescription: so.fabricDescription ?? null,
+            price: so.price.toString(),
+            paidAmount: so.paidAmount.toString(),
+            notes: so.notes ?? null,
+            status: "under_tailoring",
+          });
+        }
+
+        return inv;
+      });
+      break;
+    } catch (err: any) {
+      if (isUniqueConstraintError(err) && attempt < MAX_RETRIES - 1) continue;
+      if (isUniqueConstraintError(err)) {
+        res.status(409).json({ error: "تعذّر توليد رقم فاتورة فريد، يرجى المحاولة مرة أخرى" });
+        return;
+      }
+      throw err;
+    }
   }
 
   const result = await buildInvoiceResponse(user.shopId!, invoice);
@@ -346,43 +390,40 @@ router.post("/shop/invoices/:invoiceId/complete-stage", requireAuth, requireShop
   const activeStages = await getActiveStages(user.shopId!);
   const nextStage = getNextStage(invoice.currentStage, activeStages);
 
-  // Record in stage_history
-  await db.insert(stageHistoryTable).values({
-    invoiceId: invoice.id,
-    shopId: user.shopId!,
-    stage: invoice.currentStage,
-    completedBy: user.id,
-    nextStage: nextStage ?? null,
-  });
+  // All DB writes are atomic: stage_history + invoice update + suborders update
+  // Either everything commits or everything rolls back — no partial states
+  const { updated, isReady } = await db.transaction(async (tx) => {
+    await tx.insert(stageHistoryTable).values({
+      invoiceId: invoice.id,
+      shopId: user.shopId!,
+      stage: invoice.currentStage!,
+      completedBy: user.id,
+      nextStage: nextStage ?? null,
+    });
 
-  if (nextStage) {
-    // Move to next stage
-    const [updated] = await db.update(invoicesTable)
-      .set({ currentStage: nextStage })
+    if (nextStage) {
+      const [upd] = await tx.update(invoicesTable)
+        .set({ currentStage: nextStage })
+        .where(eq(invoicesTable.id, id))
+        .returning();
+      return { updated: upd, isReady: false };
+    }
+
+    // Last stage — mark invoice ready + all suborders ready atomically
+    const [upd] = await tx.update(invoicesTable)
+      .set({ currentStage: null, status: 'ready', allSubOrdersReady: true })
       .where(eq(invoicesTable.id, id))
       .returning();
 
-    const result = await buildInvoiceResponse(user.shopId!, updated);
-    res.json({ ...result, moved: true, nextStage, isReady: false });
-  } else {
-    // Last stage — mark as ready
-    const [updated] = await db.update(invoicesTable)
-      .set({
-        currentStage: null,
-        status: 'ready',
-        allSubOrdersReady: true,
-      })
-      .where(eq(invoicesTable.id, id))
-      .returning();
-
-    // Also mark all sub_orders as ready
-    await db.update(subOrdersTable)
+    await tx.update(subOrdersTable)
       .set({ status: 'ready' })
       .where(and(eq(subOrdersTable.shopId, user.shopId!), eq(subOrdersTable.invoiceId, id)));
 
-    const result = await buildInvoiceResponse(user.shopId!, updated);
-    res.json({ ...result, moved: false, nextStage: null, isReady: true });
-  }
+    return { updated: upd, isReady: true };
+  });
+
+  const result = await buildInvoiceResponse(user.shopId!, updated);
+  res.json({ ...result, moved: !isReady, nextStage: nextStage ?? null, isReady });
 });
 
 router.patch("/shop/invoices/:invoiceId", isManagerOrReception, requireActiveShop, async (req, res): Promise<void> => {
