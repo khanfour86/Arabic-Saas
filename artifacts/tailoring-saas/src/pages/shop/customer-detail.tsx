@@ -31,7 +31,7 @@ function InlineEditPhone({
   const [error, setError] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const openEdit = () => { setDraft(''); setError(''); setEditing(true); };
+  const openEdit = () => { setDraft(value); setError(''); setEditing(true); };
   const cancel   = () => { setEditing(false); setDraft(''); setError(''); };
 
   useEffect(() => { if (editing) inputRef.current?.focus(); }, [editing]);
