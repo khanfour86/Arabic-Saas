@@ -320,6 +320,10 @@ const translations = {
     saveContinueLight: 'حفظ العميل',
     lightBookRef: 'دفتر',
     lightPageRef: 'صفحة',
+    // VIP
+    vipLabel: 'عميل VIP',
+    vipToggle: 'تمييز كعميل VIP',
+    vipActive: 'VIP',
     // Workflow Stages
     stageCutting: 'قصاص',
     stageAssembly: 'تركيب',
@@ -689,6 +693,10 @@ const translations = {
     saveContinueLight: 'Save Customer',
     lightBookRef: 'Book',
     lightPageRef: 'Page',
+    // VIP
+    vipLabel: 'VIP Customer',
+    vipToggle: 'Mark as VIP Customer',
+    vipActive: 'VIP',
     // Workflow Stages
     stageCutting: 'Cutting',
     stageAssembly: 'Assembly',

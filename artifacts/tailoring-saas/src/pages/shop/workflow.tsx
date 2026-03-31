@@ -206,7 +206,9 @@ function WorkflowInvoiceRow({ inv, t }: { inv: any; t: (k: any) => string }) {
   const displayStage = inv.status === 'ready' ? 'ready' : inv.currentStage;
 
   return (
-    <Card className="border-0 shadow-sm rounded-2xl hover:shadow-md transition-all">
+    <Card className={`shadow-sm rounded-2xl hover:shadow-md transition-all ${
+      inv.customerIsVip ? 'border-2 border-red-500 shadow-red-200' : 'border-0'
+    }`}>
       <CardContent className="p-4">
         <div className="flex flex-col sm:flex-row sm:items-center gap-3">
           {/* Stage indicator */}
@@ -224,6 +226,9 @@ function WorkflowInvoiceRow({ inv, t }: { inv: any; t: (k: any) => string }) {
                     {t('lightBookRef')} {inv.bookNumber}
                     {inv.pageNumber ? ` / ${t('lightPageRef')} ${inv.pageNumber}` : ''}
                   </span>
+                )}
+                {inv.customerIsVip && (
+                  <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">⭐ VIP</span>
                 )}
               </div>
               <div className="font-bold text-sm">{inv.customerName}</div>

@@ -178,7 +178,9 @@ function CurrentInvoiceCard({ item, plan, onComplete, isCompleting, t }: {
   const [showMeasurements, setShowMeasurements] = useState(false);
 
   return (
-    <Card className="border-0 shadow-lg rounded-2xl overflow-hidden hover:shadow-xl transition-all">
+    <Card className={`shadow-lg rounded-2xl overflow-hidden hover:shadow-xl transition-all ${
+      item.customerIsVip ? 'border-2 border-red-500 shadow-red-200' : 'border-0'
+    }`}>
       <div className={`h-1.5 w-full ${
         item.currentStage === 'cutting' ? 'bg-blue-400' :
         item.currentStage === 'assembly' ? 'bg-purple-400' :
@@ -192,6 +194,9 @@ function CurrentInvoiceCard({ item, plan, onComplete, isCompleting, t }: {
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-display font-bold text-lg text-primary">#{item.invoiceNumber}</span>
               {item.currentStage && <StageBadge stage={item.currentStage} t={t} />}
+              {item.customerIsVip && (
+                <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">⭐ VIP</span>
+              )}
             </div>
             <div className="font-bold text-base">{item.customerName}</div>
             <div className="text-sm text-muted-foreground" dir="ltr">{item.customerPhone}</div>

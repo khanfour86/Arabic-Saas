@@ -292,18 +292,25 @@ export function CustomerDetail() {
               <User className="w-10 h-10 text-white" />
             </div>
             <div>
-              {canEdit ? (
-                <div className="text-3xl font-display font-bold mb-2">
-                  <InlineEdit
-                    value={customer.name}
-                    isPending={updateCustomerMutation.isPending}
-                    clickToEdit={t('clickToEdit')}
-                    onSave={(name) => updateCustomerMutation.mutate({ customerId, data: { name } })}
-                  />
-                </div>
-              ) : (
-                <h1 className="text-3xl font-display font-bold mb-2">{customer.name}</h1>
-              )}
+              <div className="flex items-center gap-3 mb-2">
+                {canEdit ? (
+                  <div className="text-3xl font-display font-bold">
+                    <InlineEdit
+                      value={customer.name}
+                      isPending={updateCustomerMutation.isPending}
+                      clickToEdit={t('clickToEdit')}
+                      onSave={(name) => updateCustomerMutation.mutate({ customerId, data: { name } })}
+                    />
+                  </div>
+                ) : (
+                  <h1 className="text-3xl font-display font-bold">{customer.name}</h1>
+                )}
+                {customer.isVip && (
+                  <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full shadow-lg shadow-red-500/40 animate-in fade-in">
+                    ⭐ {t('vipActive')}
+                  </span>
+                )}
+              </div>
               <div className="flex items-center gap-4 text-primary-foreground/80">
                 <div className="flex items-center gap-2 bg-black/20 px-3 py-1 rounded-lg">
                   <Phone className="w-4 h-4" />
@@ -335,17 +342,33 @@ export function CustomerDetail() {
               </div>
             </div>
           </div>
-          {isRestricted ? (
-            <Button disabled className="bg-accent/50 text-accent-foreground rounded-xl h-14 px-8 text-lg font-bold gap-2 w-full md:w-auto opacity-50 cursor-not-allowed">
-              <FilePlus className="w-6 h-6" /> {t('newInvoice')}
-            </Button>
-          ) : (
-            <Link href={`/shop/invoices/new?customerId=${customer.id}`}>
-              <Button className="bg-accent text-accent-foreground hover:bg-accent/90 shadow-lg shadow-accent/20 rounded-xl h-14 px-8 text-lg font-bold gap-2 hover:-translate-y-1 transition-all w-full md:w-auto">
+          <div className="flex flex-col items-end gap-3 w-full md:w-auto">
+            {isRestricted ? (
+              <Button disabled className="bg-accent/50 text-accent-foreground rounded-xl h-14 px-8 text-lg font-bold gap-2 w-full opacity-50 cursor-not-allowed">
                 <FilePlus className="w-6 h-6" /> {t('newInvoice')}
               </Button>
-            </Link>
-          )}
+            ) : (
+              <Link href={`/shop/invoices/new?customerId=${customer.id}`} className="w-full">
+                <Button className="bg-accent text-accent-foreground hover:bg-accent/90 shadow-lg shadow-accent/20 rounded-xl h-14 px-8 text-lg font-bold gap-2 hover:-translate-y-1 transition-all w-full">
+                  <FilePlus className="w-6 h-6" /> {t('newInvoice')}
+                </Button>
+              </Link>
+            )}
+            {user?.role === 'shop_manager' && !isRestricted && (
+              <button
+                onClick={() => updateCustomerMutation.mutate({ customerId, data: { isVip: !customer.isVip } })}
+                disabled={updateCustomerMutation.isPending}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl border-2 transition-all text-sm font-bold w-full justify-center ${
+                  customer.isVip
+                    ? 'bg-red-500 border-red-400 text-white shadow-lg shadow-red-500/30'
+                    : 'bg-white/10 border-white/30 text-white/80 hover:bg-white/20'
+                }`}
+              >
+                <span>{customer.isVip ? '⭐' : '☆'}</span>
+                {t('vipToggle')}
+              </button>
+            )}
+          </div>
         </CardContent>
       </Card>
 

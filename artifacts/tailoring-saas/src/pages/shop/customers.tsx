@@ -127,14 +127,25 @@ export function CustomersList() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {customers.map((customer) => (
             <Link key={customer.id} href={`/shop/customers/${customer.id}`}>
-              <Card className="hover-elevate cursor-pointer border-0 shadow-md hover:shadow-xl transition-all rounded-2xl group">
+              <Card className={`hover-elevate cursor-pointer shadow-md hover:shadow-xl transition-all rounded-2xl group ${
+                customer.isVip ? 'border-2 border-red-500 shadow-red-200' : 'border-0'
+              }`}>
                 <div className="p-6 flex items-center justify-between">
                   <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center group-hover:bg-primary group-hover:text-white transition-colors">
-                      <User className="w-6 h-6 text-primary group-hover:text-white" />
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center group-hover:text-white transition-colors ${
+                      customer.isVip
+                        ? 'bg-red-100 group-hover:bg-red-500'
+                        : 'bg-primary/10 group-hover:bg-primary'
+                    }`}>
+                      <User className={`w-6 h-6 group-hover:text-white ${customer.isVip ? 'text-red-500' : 'text-primary'}`} />
                     </div>
                     <div>
-                      <h3 className="font-bold text-lg text-foreground">{customer.name}</h3>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-bold text-lg text-foreground">{customer.name}</h3>
+                        {customer.isVip && (
+                          <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">⭐ VIP</span>
+                        )}
+                      </div>
                       <div className="text-muted-foreground flex items-center gap-1 mt-1 text-sm" dir="ltr">
                         <Phone className="w-3 h-3" />
                         <span className="font-mono tracking-wide">{customer.phone}</span>

@@ -264,6 +264,7 @@ router.patch("/shop/customers/:customerId", isShopUser, requireActiveShop, async
       name: parsed.data.name ?? undefined,
       notes: parsed.data.notes,
       phone: parsed.data.phone ?? undefined,
+      ...(parsed.data.isVip !== undefined ? { isVip: parsed.data.isVip } : {}),
     })
     .where(and(eq(customersTable.shopId, user.shopId!), eq(customersTable.id, id)))
     .returning();

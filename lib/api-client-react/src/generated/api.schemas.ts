@@ -218,6 +218,7 @@ export interface UpdateCustomerBody {
   notes?: string | null;
   /** @nullable */
   phone?: string | null;
+  isVip?: boolean;
 }
 
 export interface Profile {

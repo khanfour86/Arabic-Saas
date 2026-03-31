@@ -259,6 +259,7 @@ export const UpdateCustomerBody = zod.object({
   name: zod.string().nullish(),
   notes: zod.string().nullish(),
   phone: zod.string().nullish(),
+  isVip: zod.boolean().optional(),
 });
 
 export const UpdateCustomerResponse = zod.object({
