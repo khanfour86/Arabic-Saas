@@ -82,14 +82,18 @@ async function buildInvoiceResponse(shopId: number, invoice: any) {
   };
 }
 
-async function generateInvoiceNumber(shopId: number): Promise<string> {
+async function generateInvoiceNumber(shopId: number, offset = 0): Promise<string> {
   const result = await db.execute(
-    sql`SELECT COALESCE(MAX(CAST(invoice_number AS INTEGER)), 1000) + 1 AS next_num
+    sql`SELECT COALESCE(MAX(CAST(invoice_number AS INTEGER)), 1000) + 1 + ${offset} AS next_num
         FROM invoices
         WHERE shop_id = ${shopId}
         AND invoice_number ~ '^[0-9]+$'`
   );
   return String((result.rows[0] as any).next_num);
+}
+
+function isUniqueConstraintError(err: unknown): boolean {
+  return (err as any)?.code === '23505';
 }
 
 router.get("/shop/invoices", isShopUser, async (req, res): Promise<void> => {
