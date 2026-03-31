@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, invoicesTable, subOrdersTable, customersTable, profilesTable, measurementsTable, shopsTable, invoiceHistoryTable, stageHistoryTable, usersTable } from "@workspace/db";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { type AuthUser } from "../lib/auth";
 import { isShopUser, isManagerOrReception, requireActiveShop } from "../lib/shopMiddleware";
 import { requireAuth, requireShopRole } from "../lib/auth";
@@ -83,9 +83,13 @@ async function buildInvoiceResponse(shopId: number, invoice: any) {
 }
 
 async function generateInvoiceNumber(shopId: number): Promise<string> {
-  const invoices = await db.select().from(invoicesTable).where(eq(invoicesTable.shopId, shopId));
-  const nextNum = invoices.length + 1000 + 1;
-  return nextNum.toString();
+  const result = await db.execute(
+    sql`SELECT COALESCE(MAX(CAST(invoice_number AS INTEGER)), 1000) + 1 AS next_num
+        FROM invoices
+        WHERE shop_id = ${shopId}
+        AND invoice_number ~ '^[0-9]+$'`
+  );
+  return String((result.rows[0] as any).next_num);
 }
 
 router.get("/shop/invoices", isShopUser, async (req, res): Promise<void> => {

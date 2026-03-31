@@ -35,7 +35,11 @@ export const requireActiveShop: RequestHandler = async (req, res, next) => {
       .select({ subscriptionStatus: shopsTable.subscriptionStatus })
       .from(shopsTable)
       .where(eq(shopsTable.id, user.shopId));
-    if (shop?.subscriptionStatus === 'expired' || shop?.subscriptionStatus === 'suspended') {
+    if (!shop) {
+      res.status(403).json({ error: 'المحل غير موجود' });
+      return;
+    }
+    if (shop.subscriptionStatus === 'expired' || shop.subscriptionStatus === 'suspended') {
       const label = shop.subscriptionStatus === 'expired' ? 'منتهي' : 'موقوف';
       res.status(403).json({
         error: `المحل حالته ${label}، يمكنك فقط الاطلاع على البيانات السابقة وتصدير النسخة الاحتياطية.`,
@@ -44,7 +48,8 @@ export const requireActiveShop: RequestHandler = async (req, res, next) => {
       return;
     }
     next();
-  } catch {
-    next();
+  } catch (err) {
+    console.error('[requireActiveShop] DB error:', err);
+    res.status(500).json({ error: 'خطأ في التحقق من حالة الاشتراك، يرجى المحاولة لاحقاً.' });
   }
 };

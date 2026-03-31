@@ -69,23 +69,28 @@ router.post("/shop/suborders", isManagerOrReception, requireActiveShop, async (r
     return;
   }
 
-  const existingSubOrders = await db.select().from(subOrdersTable)
-    .where(eq(subOrdersTable.invoiceId, invoiceId));
-  const subOrderNumber = `${invoice.invoiceNumber}-${existingSubOrders.length + 1}`;
-
-  const [so] = await db.insert(subOrdersTable).values({
-    invoiceId,
-    shopId: user.shopId!,
-    profileId,
-    subOrderNumber,
-    quantity,
-    fabricSource,
-    fabricDescription: fabricDescription ?? null,
-    price: price.toString(),
-    paidAmount: paidAmount.toString(),
-    notes: notes ?? null,
-    status: "under_tailoring",
-  }).returning();
+  const so = await db.transaction(async (tx) => {
+    const existingSubOrders = await tx
+      .select({ id: subOrdersTable.id })
+      .from(subOrdersTable)
+      .where(eq(subOrdersTable.invoiceId, invoiceId))
+      .for('update');
+    const subOrderNumber = `${invoice.invoiceNumber}-${existingSubOrders.length + 1}`;
+    const [inserted] = await tx.insert(subOrdersTable).values({
+      invoiceId,
+      shopId: user.shopId!,
+      profileId,
+      subOrderNumber,
+      quantity,
+      fabricSource,
+      fabricDescription: fabricDescription ?? null,
+      price: price.toString(),
+      paidAmount: paidAmount.toString(),
+      notes: notes ?? null,
+      status: "under_tailoring",
+    }).returning();
+    return inserted;
+  });
 
   await checkAndUpdateInvoiceReadiness(user.shopId!, invoiceId);
   const result = await buildSubOrderResponse(so);

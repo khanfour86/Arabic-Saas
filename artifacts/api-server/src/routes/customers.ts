@@ -1,34 +1,13 @@
 import { Router, type IRouter, type RequestHandler } from "express";
-import { db, customersTable, profilesTable, measurementsTable, measurementHistoryTable, shopsTable, invoicesTable } from "@workspace/db";
+import { db, customersTable, profilesTable, measurementsTable, measurementHistoryTable, invoicesTable } from "@workspace/db";
 import { eq, and, ilike, desc, count } from "drizzle-orm";
 import { CreateCustomerBody, UpdateCustomerBody, CreateProfileBody } from "@workspace/api-zod";
-import { requireAuth, requireShopRole, type AuthUser } from "../lib/auth";
+import { type AuthUser } from "../lib/auth";
+import { isShopUser as isShopUserMiddleware, requireActiveShop } from "../lib/shopMiddleware";
 
 const router: IRouter = Router();
 
-const isShopUser: RequestHandler = (req, res, next) => {
-  requireAuth(req, res, () => {
-    requireShopRole("shop_manager", "reception", "tailor")(req, res, next);
-  });
-};
-
-const requireActiveShop: RequestHandler = async (req, res, next) => {
-  const user = (req as any).user as AuthUser;
-  if (!user?.shopId) { next(); return; }
-  try {
-    const [shop] = await db.select({ subscriptionStatus: shopsTable.subscriptionStatus })
-      .from(shopsTable).where(eq(shopsTable.id, user.shopId));
-    if (shop?.subscriptionStatus === 'expired' || shop?.subscriptionStatus === 'suspended') {
-      const label = shop.subscriptionStatus === 'expired' ? 'منتهي' : 'موقوف';
-      res.status(403).json({
-        error: `المحل حالته ${label}، يمكنك فقط الاطلاع على البيانات السابقة وتصدير النسخة الاحتياطية.`,
-        subscriptionStatus: shop.subscriptionStatus,
-      });
-      return;
-    }
-    next();
-  } catch { next(); }
-};
+const isShopUser: RequestHandler = isShopUserMiddleware;
 
 async function getProfilesWithMeasurements(shopId: number, customerId: number) {
   const profiles = await db.select().from(profilesTable)
