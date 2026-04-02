@@ -101,16 +101,24 @@ export function KuwaitLocationPicker({
               <ChevronsUpDown className="w-4 h-4 opacity-50 shrink-0 ms-2" />
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-[--radix-popover-trigger-width] p-0" dir={dir}>
-            <Command>
-              <CommandInput placeholder="ابحث..." className="h-9" dir={dir} />
+          <PopoverContent
+            className="w-[--radix-popover-trigger-width] p-0 rounded-xl border border-white/10 bg-gray-900 text-gray-100 shadow-2xl"
+            dir={dir}
+          >
+            <Command className="bg-transparent text-gray-100">
+              <CommandInput
+                placeholder="ابحث..."
+                className="h-9 text-gray-100 placeholder:text-gray-400 border-b border-white/10"
+                dir={dir}
+              />
               <CommandList>
-                <CommandEmpty>لا توجد نتائج</CommandEmpty>
+                <CommandEmpty className="py-3 text-center text-sm text-gray-400">لا توجد نتائج</CommandEmpty>
                 <CommandGroup>
                   {areas.map(a => (
                     <CommandItem
                       key={a}
                       value={a}
+                      className="text-gray-100 aria-selected:bg-white/10 hover:bg-white/10 cursor-pointer"
                       onSelect={(val) => {
                         onAreaChange(val === area ? '' : val);
                         setAreaOpen(false);
