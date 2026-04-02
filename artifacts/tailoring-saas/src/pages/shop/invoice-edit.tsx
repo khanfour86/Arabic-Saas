@@ -7,8 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useLocation, useParams } from 'wouter';
-import { useQueryClient } from '@tanstack/react-query';
-import { Loader2, Plus, Trash2, Save, User, Edit3, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Loader2, Plus, Trash2, Save, User, Edit3, ChevronLeft, ChevronRight, BookOpen } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Link } from 'wouter';
 
@@ -24,19 +24,221 @@ type EditableSubOrder = {
   isNew?: boolean;
 };
 
-export function InvoiceEdit() {
-  const params = useParams();
-  const invoiceId = parseInt(params.id || '0');
-  const [, setLocation] = useLocation();
+// ─────────────────────────────────────────────
+// Light plan edit form
+// ─────────────────────────────────────────────
+function LightInvoiceEdit({ inv, onSaved }: { inv: any; onSaved: () => void }) {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { t, dir } = useTranslation();
 
-  const { data: inv, isLoading: invLoading } = useGetInvoice(invoiceId);
-  const { data: customer, isLoading: customerLoading } = useGetCustomer(
-    inv?.customerId ?? 0,
-    { query: { enabled: !!inv?.customerId } }
+  const subOrder = inv.subOrders?.[0];
+
+  const [bookNumber, setBookNumber] = useState(inv.bookNumber ?? '');
+  const [pageNumber, setPageNumber] = useState(inv.pageNumber ?? '');
+  const [quantity, setQuantity] = useState<number>(subOrder?.quantity ?? 1);
+  const [price, setPrice] = useState<number>(Number(subOrder?.price ?? 0));
+  const [paidAmount, setPaidAmount] = useState<number>(Number(subOrder?.paidAmount ?? 0));
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!bookNumber.trim()) {
+      toast({ title: t('error'), description: t('mustEnterBookNumber'), variant: 'destructive' });
+      return;
+    }
+    if (!quantity || quantity <= 0) {
+      toast({ title: t('error'), description: t('mustEnterQty'), variant: 'destructive' });
+      return;
+    }
+    if (!price || price <= 0) {
+      toast({ title: t('error'), description: t('mustEnterPrice'), variant: 'destructive' });
+      return;
+    }
+    if (paidAmount > price) {
+      toast({ title: t('error'), description: t('paidExceedsPriceToast'), variant: 'destructive' });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      // Update invoice-level fields (bookNumber, pageNumber)
+      const invRes = await fetch(`/api/shop/invoices/${inv.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookNumber: bookNumber.trim(), pageNumber: pageNumber.trim() || null }),
+      });
+      if (!invRes.ok) {
+        const d = await invRes.json();
+        throw new Error(d.error || t('error'));
+      }
+
+      // Update sub-order fields (quantity, price, paidAmount)
+      if (subOrder?.id) {
+        const soRes = await fetch(`/api/shop/suborders/${subOrder.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ quantity, price, paidAmount }),
+        });
+        if (!soRes.ok) {
+          const d = await soRes.json();
+          throw new Error(d.error || t('error'));
+        }
+      }
+
+      queryClient.invalidateQueries({ queryKey: [`/api/shop/invoices/${inv.id}`] });
+      queryClient.invalidateQueries({ queryKey: ['/api/shop/invoices'] });
+      toast({ title: t('ordersUpdated') });
+      onSaved();
+    } catch (err: any) {
+      toast({ title: t('error'), description: err.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card className="border-0 shadow-lg rounded-2xl overflow-hidden">
+      <CardContent className="p-6 space-y-6">
+        <div className="flex items-center gap-2 text-sky-600 font-bold text-sm">
+          <BookOpen className="w-4 h-4" />
+          <span>{t('planLight')} — {t('planLightDesc')}</span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-2">
+            <label className="text-sm font-bold">
+              {t('bookNumberLabel')} <span className="text-destructive">*</span>
+            </label>
+            <Input
+              type="text"
+              value={bookNumber}
+              placeholder={t('enterBookNumber')}
+              onChange={e => setBookNumber(e.target.value)}
+              className={`h-14 bg-muted/50 rounded-xl text-center text-lg font-bold ${!bookNumber.trim() ? 'border-destructive/40' : ''}`}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-bold">{t('pageNumberLabel')}</label>
+            <Input
+              type="text"
+              value={pageNumber}
+              placeholder={t('enterPageNumber')}
+              onChange={e => setPageNumber(e.target.value)}
+              className="h-14 bg-muted/50 rounded-xl text-center text-lg font-bold"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-bold">
+              {t('quantityLabel')}
+              {(!quantity || quantity <= 0) && <span className="text-destructive mr-1">*</span>}
+            </label>
+            <Input
+              type="text"
+              inputMode="numeric"
+              value={quantity || ''}
+              placeholder={t('enterQty')}
+              onChange={e => {
+                const raw = toEnglishDigits(e.target.value).replace(/[^0-9]/g, '');
+                setQuantity(raw === '' ? 0 : parseInt(raw));
+              }}
+              className={`h-14 bg-muted/50 rounded-xl text-center text-lg font-bold ${(!quantity || quantity <= 0) ? 'border-destructive/50' : ''}`}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-bold text-primary">{t('totalPriceLabel')}</label>
+            <div className="relative">
+              <Input
+                type="text"
+                inputMode="decimal"
+                value={price || ''}
+                onChange={e => {
+                  const val = parseFloat(toEnglishDigits(e.target.value)) || 0;
+                  setPrice(val);
+                  if (paidAmount > val) setPaidAmount(val);
+                }}
+                className="h-14 pl-12 bg-white border-primary/30 focus-visible:ring-primary rounded-xl text-xl font-bold text-primary"
+                dir="ltr"
+              />
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold">{t('kwd')}</span>
+            </div>
+          </div>
+
+          <div className="space-y-2 md:col-span-2">
+            <div className="flex justify-between items-center">
+              <label className="text-sm font-bold text-emerald-600">{t('paidAmountLabel')}</label>
+              {price > 0 && paidAmount === price && (
+                <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">{t('fullyPaid')}</span>
+              )}
+            </div>
+            <div className="relative">
+              <Input
+                type="text"
+                inputMode="decimal"
+                value={paidAmount || ''}
+                onChange={e => setPaidAmount(parseFloat(toEnglishDigits(e.target.value)) || 0)}
+                className={`h-14 pl-12 bg-white rounded-xl text-xl font-bold transition-colors ${
+                  paidAmount > price && price > 0
+                    ? 'border-red-500 border-2 text-red-600'
+                    : 'border-emerald-500/30 text-emerald-600'
+                }`}
+                dir="ltr"
+              />
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold">{t('kwd')}</span>
+            </div>
+            {paidAmount > price && price > 0 ? (
+              <p className="text-xs text-red-600 font-bold">{t('paidExceedsTotal')}</p>
+            ) : price > 0 ? (
+              <p className="text-xs text-muted-foreground">
+                {t('remaining')} <span className="font-bold text-foreground">{(price - paidAmount).toFixed(3)} {t('kwd')}</span>
+              </p>
+            ) : null}
+          </div>
+        </div>
+
+        {/* Sticky save bar */}
+        <div className="sticky bottom-4 md:bottom-8 mt-4 bg-white/80 backdrop-blur-xl border border-border shadow-2xl rounded-3xl p-4 flex flex-col md:flex-row items-center justify-between gap-4 z-40">
+          <div className="flex gap-6 w-full md:w-auto px-4 justify-between">
+            <div>
+              <div className="text-xs text-muted-foreground font-bold">{t('invoiceTotalBar')}</div>
+              <div className="text-2xl font-display font-bold text-primary">{price.toFixed(3)} {t('kwd')}</div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground font-bold">{t('colPaid')}</div>
+              <div className="text-2xl font-display font-bold text-emerald-600">{paidAmount.toFixed(3)} {t('kwd')}</div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground font-bold">{t('colRemaining')}</div>
+              <div className="text-2xl font-display font-bold text-red-500">{Math.max(0, price - paidAmount).toFixed(3)} {t('kwd')}</div>
+            </div>
+          </div>
+          <Button
+            className="w-full md:w-auto h-14 px-12 rounded-2xl text-lg font-bold bg-gradient-to-r from-primary to-primary/90 shadow-lg shadow-primary/20 hover:scale-105 transition-transform"
+            onClick={handleSave}
+            disabled={saving}
+          >
+            {saving ? <Loader2 className="w-6 h-6 animate-spin" /> : <><Save className="w-5 h-5 ml-2" /> {t('saveInvoice')}</>}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
+}
+
+// ─────────────────────────────────────────────
+// Premium plan edit form
+// ─────────────────────────────────────────────
+function PremiumInvoiceEdit({ inv, customer, invoiceId, onSaved }: {
+  inv: any;
+  customer: any;
+  invoiceId: number;
+  onSaved: () => void;
+}) {
+  const { t, dir } = useTranslation();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const [orders, setOrders] = useState<EditableSubOrder[]>([]);
   const [saving, setSaving] = useState(false);
@@ -85,116 +287,67 @@ export function InvoiceEdit() {
   const computeDiff = (): any[] => {
     const changes: any[] = [];
     const fieldLabels: Record<string, string> = {
-      quantity: 'qty',
-      price: 'price',
-      paidAmount: 'paidAmount',
-      fabricSource: 'fabricSource',
-      fabricDescription: 'fabricDescription',
+      quantity: 'qty', price: 'price', paidAmount: 'paidAmount',
+      fabricSource: 'fabricSource', fabricDescription: 'fabricDescription',
     };
-
     for (const curr of orders.filter(o => !o.isNew)) {
       const orig = (inv?.subOrders ?? []).find((s: any) => s.id === curr.id);
       if (!orig) continue;
       for (const field of Object.keys(fieldLabels) as (keyof EditableSubOrder)[]) {
         const oldRaw = orig[field];
         const newRaw = curr[field];
-        const oldNum = parseFloat(String(oldRaw ?? '0'));
-        const newNum = parseFloat(String(newRaw ?? '0'));
         const isNumeric = ['quantity', 'price', 'paidAmount'].includes(field as string);
         const changed = isNumeric
-          ? Math.abs(oldNum - newNum) > 0.0001
+          ? Math.abs(parseFloat(String(oldRaw ?? '0')) - parseFloat(String(newRaw ?? '0'))) > 0.0001
           : String(oldRaw ?? '') !== String(newRaw ?? '');
         if (changed) {
-          changes.push({
-            type: 'updated',
-            subOrderId: curr.id,
-            subOrderNumber: orig.subOrderNumber,
-            profileName: orig.profileName,
-            field,
-            oldValue: oldRaw,
-            newValue: newRaw,
-          });
+          changes.push({ type: 'updated', subOrderId: curr.id, subOrderNumber: orig.subOrderNumber, profileName: orig.profileName, field, oldValue: oldRaw, newValue: newRaw });
         }
       }
     }
-
     for (const curr of orders.filter(o => o.isNew)) {
       const profile = (customer?.profiles ?? []).find((p: any) => p.id === curr.profileId);
-      changes.push({
-        type: 'added',
-        profileName: profile?.name ?? String(curr.profileId),
-        quantity: curr.quantity,
-        fabricSource: curr.fabricSource,
-        price: curr.price,
-        paidAmount: curr.paidAmount,
-      });
+      changes.push({ type: 'added', profileName: profile?.name ?? String(curr.profileId), quantity: curr.quantity, fabricSource: curr.fabricSource, price: curr.price, paidAmount: curr.paidAmount });
     }
-
     const oldTotal = (inv?.subOrders ?? []).reduce((s: number, so: any) => s + parseFloat(String(so.price || 0)), 0);
     const newTotal = orders.reduce((s, o) => s + parseFloat(String(o.price || 0)), 0);
     const oldPaid = (inv?.subOrders ?? []).reduce((s: number, so: any) => s + parseFloat(String(so.paidAmount || 0)), 0);
     const newPaid = orders.reduce((s, o) => s + parseFloat(String(o.paidAmount || 0)), 0);
     changes.push({ type: 'summary', oldTotal, newTotal, oldPaid, newPaid });
-
     return changes;
   };
 
   const handleSave = async () => {
     const newOnes = orders.filter(o => o.isNew);
     if (newOnes.some(o => !o.profileId)) {
-      toast({ title: t('error'), description: t('mustSelectProfile'), variant: 'destructive' });
-      return;
+      toast({ title: t('error'), description: t('mustSelectProfile'), variant: 'destructive' }); return;
     }
     if (orders.some(o => !o.quantity || Number(o.quantity) <= 0)) {
-      toast({ title: t('error'), description: t('mustEnterQty'), variant: 'destructive' });
-      return;
+      toast({ title: t('error'), description: t('mustEnterQty'), variant: 'destructive' }); return;
     }
     if (newOnes.some(o => Number(o.price) <= 0)) {
-      toast({ title: t('error'), description: t('mustEnterPrice'), variant: 'destructive' });
-      return;
+      toast({ title: t('error'), description: t('mustEnterPrice'), variant: 'destructive' }); return;
     }
 
     const diffChanges = computeDiff();
-
     setSaving(true);
     try {
-      const existing = orders.filter(o => !o.isNew && o.id);
-      const toAdd = orders.filter(o => o.isNew);
-
       await Promise.all(
-        existing.map(o =>
+        orders.filter(o => !o.isNew && o.id).map(o =>
           fetch(`/api/shop/suborders/${o.id}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              quantity: Number(o.quantity),
-              fabricSource: o.fabricSource,
-              fabricDescription: o.fabricDescription || null,
-              price: Number(o.price),
-              paidAmount: Number(o.paidAmount),
-              notes: o.notes || null,
-            }),
+            body: JSON.stringify({ quantity: Number(o.quantity), fabricSource: o.fabricSource, fabricDescription: o.fabricDescription || null, price: Number(o.price), paidAmount: Number(o.paidAmount), notes: o.notes || null }),
           })
         )
       );
-
-      for (const o of toAdd) {
+      for (const o of orders.filter(o => o.isNew)) {
         await fetch('/api/shop/suborders', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            invoiceId,
-            profileId: Number(o.profileId),
-            quantity: Number(o.quantity),
-            fabricSource: o.fabricSource,
-            fabricDescription: o.fabricDescription || null,
-            price: Number(o.price),
-            paidAmount: Number(o.paidAmount) || 0,
-            notes: o.notes || null,
-          }),
+          body: JSON.stringify({ invoiceId, profileId: Number(o.profileId), quantity: Number(o.quantity), fabricSource: o.fabricSource, fabricDescription: o.fabricDescription || null, price: Number(o.price), paidAmount: Number(o.paidAmount) || 0, notes: o.notes || null }),
         });
       }
-
       if (diffChanges.length > 0) {
         await fetch(`/api/shop/invoices/${invoiceId}/history`, {
           method: 'POST',
@@ -202,12 +355,11 @@ export function InvoiceEdit() {
           body: JSON.stringify({ changes: diffChanges }),
         });
       }
-
       queryClient.invalidateQueries({ queryKey: [`/api/shop/invoices/${invoiceId}`] });
       queryClient.invalidateQueries({ queryKey: [`/api/shop/invoices/${invoiceId}/history`] });
       queryClient.invalidateQueries({ queryKey: ['/api/shop/invoices'] });
       toast({ title: t('ordersUpdated') });
-      setLocation(`/shop/invoices/${invoiceId}`);
+      onSaved();
     } catch {
       toast({ title: t('error'), variant: 'destructive' });
     } finally {
@@ -215,18 +367,218 @@ export function InvoiceEdit() {
     }
   };
 
-  const ChevronNav = dir === 'rtl' ? ChevronLeft : ChevronRight;
-
-  if (invLoading || customerLoading)
-    return <div className="flex justify-center p-12"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
-  if (!inv) return <div className="p-12 text-center text-red-500">{t('noInvoiceFound')}</div>;
-  if (!customer) return <div className="p-12 text-center text-red-500">{t('customerNotFound')}</div>;
-
-  const mainProfiles = (customer.profiles ?? []).sort((a: any, b: any) => {
+  const mainProfiles = (customer?.profiles ?? []).sort((a: any, b: any) => {
     if (a.isMain !== b.isMain) return a.isMain ? -1 : 1;
     if (a.isProof !== b.isProof) return a.isProof ? -1 : 1;
     return 0;
   });
+
+  return (
+    <div className="space-y-6">
+      {orders.map((order, index) => (
+        <Card
+          key={order.id ?? `new-${index}`}
+          className={`border-0 shadow-lg rounded-2xl overflow-visible relative z-10 ${order.isNew ? 'ring-2 ring-primary/40' : ''}`}
+        >
+          <div className={`absolute -right-3 -top-3 w-8 h-8 ${order.isNew ? 'bg-emerald-500' : 'bg-primary'} text-white rounded-full flex items-center justify-center font-bold shadow-md text-sm`}>
+            {order.isNew ? '+' : index + 1}
+          </div>
+          <CardContent className="p-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-sm font-bold">{t('profileLabel')}</label>
+                <Select
+                  value={order.profileId ? order.profileId.toString() : ''}
+                  onValueChange={v => setField(index, 'profileId', parseInt(v))}
+                  disabled={!order.isNew}
+                >
+                  <SelectTrigger className="h-14 bg-muted/50 rounded-xl text-lg font-bold" dir={dir}>
+                    <SelectValue placeholder={t('choosePerson')} />
+                  </SelectTrigger>
+                  <SelectContent dir={dir}>
+                    {mainProfiles.map((p: any) => (
+                      <SelectItem key={p.id} value={p.id.toString()}>
+                        <span className="flex items-center gap-2">
+                          {p.name}
+                          {p.isMain && <span className="text-xs bg-accent/30 text-accent-foreground px-1.5 py-0.5 rounded-full">{t('badgeMain')}</span>}
+                          {p.isProof && <span className="text-xs bg-orange-500/20 text-orange-700 px-1.5 py-0.5 rounded-full">{t('badgeProof')}</span>}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-bold">
+                  {t('quantityLabel')}
+                  {(!order.quantity || order.quantity <= 0) && <span className="text-destructive mr-1">*</span>}
+                </label>
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  value={order.quantity || ''}
+                  placeholder={t('enterQty')}
+                  onChange={e => {
+                    const raw = toEnglishDigits(e.target.value).replace(/[^0-9]/g, '');
+                    setField(index, 'quantity', raw === '' ? 0 : parseInt(raw));
+                  }}
+                  className={`h-14 bg-muted/50 rounded-xl text-center text-lg font-bold ${(!order.quantity || order.quantity <= 0) ? 'border-destructive/50' : ''}`}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-bold">{t('fabricSource')}</label>
+                <Select value={order.fabricSource} onValueChange={v => setField(index, 'fabricSource', v)}>
+                  <SelectTrigger className="h-14 bg-muted/50 rounded-xl font-bold" dir={dir}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent dir={dir}>
+                    <SelectItem value="shop_fabric">{t('shopFabric')}</SelectItem>
+                    <SelectItem value="customer_fabric">{t('customerFabric')}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-sm font-bold">{t('fabricDetails')}</label>
+                <Input
+                  value={order.fabricDescription || ''}
+                  onChange={e => setField(index, 'fabricDescription', e.target.value)}
+                  className="h-14 bg-muted/50 rounded-xl"
+                  placeholder={t('fabricDetailsHint')}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-primary">{t('totalPriceLabel')}</label>
+                <div className="relative">
+                  <Input
+                    type="text"
+                    inputMode="decimal"
+                    value={order.price || ''}
+                    onChange={e => {
+                      const v = parseFloat(toEnglishDigits(e.target.value)) || 0;
+                      setField(index, 'price', v);
+                      if (Number(order.paidAmount) > v) setField(index, 'paidAmount', v);
+                    }}
+                    className="h-14 pl-12 bg-white border-primary/30 focus-visible:ring-primary rounded-xl text-xl font-bold text-primary"
+                    dir="ltr"
+                  />
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold">{t('kwd')}</span>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <label className="text-sm font-bold text-emerald-600">{t('paidAmountLabel')}</label>
+                  {order.price > 0 && Number(order.paidAmount) === Number(order.price) && (
+                    <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">{t('fullyPaid')}</span>
+                  )}
+                </div>
+                <div className="relative">
+                  <Input
+                    type="text"
+                    inputMode="decimal"
+                    value={order.paidAmount || ''}
+                    onChange={e => setField(index, 'paidAmount', parseFloat(toEnglishDigits(e.target.value)) || 0)}
+                    className={`h-14 pl-12 bg-white rounded-xl text-xl font-bold transition-colors ${
+                      Number(order.paidAmount) > Number(order.price) && Number(order.price) > 0
+                        ? 'border-red-500 border-2 text-red-600'
+                        : 'border-emerald-500/30 text-emerald-600'
+                    }`}
+                    dir="ltr"
+                  />
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold">{t('kwd')}</span>
+                </div>
+                {Number(order.price) > 0 && (
+                  <p className={`text-xs font-bold ${Number(order.paidAmount) > Number(order.price) ? 'text-red-600' : 'text-muted-foreground'}`}>
+                    {Number(order.paidAmount) > Number(order.price)
+                      ? t('paidExceedsTotal')
+                      : <>{t('remaining')} <span className="text-foreground">{(Number(order.price) - Number(order.paidAmount)).toFixed(3)} {t('kwd')}</span></>
+                    }
+                  </p>
+                )}
+              </div>
+
+            </div>
+
+            {(orders.length > 1 || order.isNew) && (
+              <div className="mt-6 pt-4 border-t border-border text-left">
+                <Button variant="ghost" className="text-red-500 hover:text-red-600 hover:bg-red-50" onClick={() => remove(index)}>
+                  <Trash2 className="w-4 h-4 ml-2" /> {t('removeOrder')}
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      ))}
+
+      <Button
+        variant="outline"
+        className="w-full h-14 border-dashed border-2 border-primary/30 text-primary hover:bg-primary/5 rounded-2xl font-bold text-lg"
+        onClick={addNew}
+      >
+        <Plus className="w-5 h-5 ml-2" /> {t('addAnotherOrder')}
+      </Button>
+
+      <div className="sticky bottom-4 md:bottom-8 mt-12 bg-white/80 backdrop-blur-xl border border-border shadow-2xl rounded-3xl p-4 flex flex-col md:flex-row items-center justify-between gap-4 z-40">
+        <div className="flex gap-6 w-full md:w-auto px-4 justify-between">
+          <div>
+            <div className="text-xs text-muted-foreground font-bold">{t('invoiceTotalBar')}</div>
+            <div className="text-2xl font-display font-bold text-primary">{totalAmount.toFixed(3)} {t('kwd')}</div>
+          </div>
+          <div>
+            <div className="text-xs text-muted-foreground font-bold">{t('colPaid')}</div>
+            <div className="text-2xl font-display font-bold text-emerald-600">{totalPaid.toFixed(3)} {t('kwd')}</div>
+          </div>
+          <div>
+            <div className="text-xs text-muted-foreground font-bold">{t('colRemaining')}</div>
+            <div className="text-2xl font-display font-bold text-red-500">{(totalAmount - totalPaid).toFixed(3)} {t('kwd')}</div>
+          </div>
+        </div>
+        <Button
+          className="w-full md:w-auto h-14 px-12 rounded-2xl text-lg font-bold bg-gradient-to-r from-primary to-primary/90 shadow-lg shadow-primary/20 hover:scale-105 transition-transform"
+          onClick={handleSave}
+          disabled={saving}
+        >
+          {saving ? <Loader2 className="w-6 h-6 animate-spin" /> : <><Save className="w-5 h-5 ml-2" /> {t('saveInvoice')}</>}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// Main InvoiceEdit — detects plan and delegates
+// ─────────────────────────────────────────────
+export function InvoiceEdit() {
+  const params = useParams();
+  const invoiceId = parseInt(params.id || '0');
+  const [, setLocation] = useLocation();
+  const { t, dir } = useTranslation();
+
+  const { data: inv, isLoading: invLoading } = useGetInvoice(invoiceId);
+  const { data: customer, isLoading: customerLoading } = useGetCustomer(
+    inv?.customerId ?? 0,
+    { query: { enabled: !!inv?.customerId } }
+  );
+  const { data: shopStatus, isLoading: statusLoading } = useQuery({
+    queryKey: ['/api/shop/status'],
+    queryFn: () => fetch('/api/shop/status').then(r => r.ok ? r.json() : null),
+    staleTime: 60000,
+  });
+
+  const isLightPlan = shopStatus?.plan === 'light';
+  const ChevronNav = dir === 'rtl' ? ChevronLeft : ChevronRight;
+
+  if (invLoading || customerLoading || statusLoading)
+    return <div className="flex justify-center p-12"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
+  if (!inv) return <div className="p-12 text-center text-red-500">{t('noInvoiceFound')}</div>;
+  if (!customer) return <div className="p-12 text-center text-red-500">{t('customerNotFound')}</div>;
+
+  const handleSaved = () => setLocation(`/shop/invoices/${invoiceId}`);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 max-w-4xl mx-auto">
@@ -246,190 +598,11 @@ export function InvoiceEdit() {
         </div>
       </div>
 
-      <div className="space-y-6">
-        {orders.map((order, index) => (
-          <Card
-            key={order.id ?? `new-${index}`}
-            className={`border-0 shadow-lg rounded-2xl overflow-visible relative z-10 ${order.isNew ? 'ring-2 ring-primary/40' : ''}`}
-          >
-            <div className={`absolute -right-3 -top-3 w-8 h-8 ${order.isNew ? 'bg-emerald-500' : 'bg-primary'} text-white rounded-full flex items-center justify-center font-bold shadow-md text-sm`}>
-              {order.isNew ? '+' : index + 1}
-            </div>
-            <CardContent className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-                <div className="space-y-2 md:col-span-2">
-                  <label className="text-sm font-bold">{t('profileLabel')}</label>
-                  <Select
-                    value={order.profileId ? order.profileId.toString() : ''}
-                    onValueChange={v => setField(index, 'profileId', parseInt(v))}
-                    disabled={!order.isNew}
-                  >
-                    <SelectTrigger className="h-14 bg-muted/50 rounded-xl text-lg font-bold" dir={dir}>
-                      <SelectValue placeholder={t('choosePerson')} />
-                    </SelectTrigger>
-                    <SelectContent dir={dir}>
-                      {mainProfiles.map((p: any) => (
-                        <SelectItem key={p.id} value={p.id.toString()}>
-                          <span className="flex items-center gap-2">
-                            {p.name}
-                            {p.isMain && <span className="text-xs bg-accent/30 text-accent-foreground px-1.5 py-0.5 rounded-full">{t('badgeMain')}</span>}
-                            {p.isProof && <span className="text-xs bg-orange-500/20 text-orange-700 px-1.5 py-0.5 rounded-full">{t('badgeProof')}</span>}
-                          </span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-bold">
-                    {t('quantityLabel')}
-                    {(!order.quantity || order.quantity <= 0) && <span className="text-destructive mr-1">*</span>}
-                  </label>
-                  <Input
-                    type="text"
-                    inputMode="numeric"
-                    value={order.quantity || ''}
-                    placeholder={t('enterQty')}
-                    onChange={e => {
-                      const raw = toEnglishDigits(e.target.value).replace(/[^0-9]/g, '');
-                      setField(index, 'quantity', raw === '' ? 0 : parseInt(raw));
-                    }}
-                    className={`h-14 bg-muted/50 rounded-xl text-center text-lg font-bold ${(!order.quantity || order.quantity <= 0) ? 'border-destructive/50' : ''}`}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-bold">{t('fabricSource')}</label>
-                  <Select
-                    value={order.fabricSource}
-                    onValueChange={v => setField(index, 'fabricSource', v)}
-                  >
-                    <SelectTrigger className="h-14 bg-muted/50 rounded-xl font-bold" dir={dir}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent dir={dir}>
-                      <SelectItem value="shop_fabric">{t('shopFabric')}</SelectItem>
-                      <SelectItem value="customer_fabric">{t('customerFabric')}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2 md:col-span-2">
-                  <label className="text-sm font-bold">{t('fabricDetails')}</label>
-                  <Input
-                    value={order.fabricDescription || ''}
-                    onChange={e => setField(index, 'fabricDescription', e.target.value)}
-                    className="h-14 bg-muted/50 rounded-xl"
-                    placeholder={t('fabricDetailsHint')}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-primary">{t('totalPriceLabel')}</label>
-                  <div className="relative">
-                    <Input
-                      type="text"
-                      inputMode="decimal"
-                      value={order.price || ''}
-                      onChange={e => {
-                        const v = parseFloat(toEnglishDigits(e.target.value)) || 0;
-                        setField(index, 'price', v);
-                        if (Number(order.paidAmount) > v) setField(index, 'paidAmount', v);
-                      }}
-                      className="h-14 pl-12 bg-white border-primary/30 focus-visible:ring-primary rounded-xl text-xl font-bold text-primary"
-                      dir="ltr"
-                    />
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold">{t('kwd')}</span>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <label className="text-sm font-bold text-emerald-600">{t('paidAmountLabel')}</label>
-                    {order.price > 0 && Number(order.paidAmount) === Number(order.price) && (
-                      <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">{t('fullyPaid')}</span>
-                    )}
-                  </div>
-                  <div className="relative">
-                    <Input
-                      type="text"
-                      inputMode="decimal"
-                      value={order.paidAmount || ''}
-                      onChange={e => {
-                        const paid = parseFloat(toEnglishDigits(e.target.value)) || 0;
-                        setField(index, 'paidAmount', paid);
-                      }}
-                      className={`h-14 pl-12 bg-white rounded-xl text-xl font-bold transition-colors ${
-                        Number(order.paidAmount) > Number(order.price) && Number(order.price) > 0
-                          ? 'border-red-500 border-2 text-red-600'
-                          : 'border-emerald-500/30 text-emerald-600'
-                      }`}
-                      dir="ltr"
-                    />
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold">{t('kwd')}</span>
-                  </div>
-                  {Number(order.price) > 0 && (
-                    <p className={`text-xs font-bold ${Number(order.paidAmount) > Number(order.price) ? 'text-red-600' : 'text-muted-foreground'}`}>
-                      {Number(order.paidAmount) > Number(order.price)
-                        ? t('paidExceedsTotal')
-                        : <>{t('remaining')} <span className="text-foreground">{(Number(order.price) - Number(order.paidAmount)).toFixed(3)} {t('kwd')}</span></>
-                      }
-                    </p>
-                  )}
-                </div>
-
-              </div>
-
-              {(orders.length > 1 || order.isNew) && (
-                <div className="mt-6 pt-4 border-t border-border text-left">
-                  <Button
-                    variant="ghost"
-                    className="text-red-500 hover:text-red-600 hover:bg-red-50"
-                    onClick={() => remove(index)}
-                  >
-                    <Trash2 className="w-4 h-4 ml-2" /> {t('removeOrder')}
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        ))}
-
-        <Button
-          variant="outline"
-          className="w-full h-14 border-dashed border-2 border-primary/30 text-primary hover:bg-primary/5 rounded-2xl font-bold text-lg"
-          onClick={addNew}
-        >
-          <Plus className="w-5 h-5 ml-2" /> {t('addAnotherOrder')}
-        </Button>
-      </div>
-
-      <div className="sticky bottom-4 md:bottom-8 mt-12 bg-white/80 backdrop-blur-xl border border-border shadow-2xl rounded-3xl p-4 flex flex-col md:flex-row items-center justify-between gap-4 z-40">
-        <div className="flex gap-6 w-full md:w-auto px-4 justify-between">
-          <div>
-            <div className="text-xs text-muted-foreground font-bold">{t('invoiceTotalBar')}</div>
-            <div className="text-2xl font-display font-bold text-primary">{totalAmount.toFixed(3)} {t('kwd')}</div>
-          </div>
-          <div>
-            <div className="text-xs text-muted-foreground font-bold">{t('colPaid')}</div>
-            <div className="text-2xl font-display font-bold text-emerald-600">{totalPaid.toFixed(3)} {t('kwd')}</div>
-          </div>
-          <div>
-            <div className="text-xs text-muted-foreground font-bold">{t('colRemaining')}</div>
-            <div className="text-2xl font-display font-bold text-red-500">{(totalAmount - totalPaid).toFixed(3)} {t('kwd')}</div>
-          </div>
-        </div>
-
-        <Button
-          className="w-full md:w-auto h-14 px-12 rounded-2xl text-lg font-bold bg-gradient-to-r from-primary to-primary/90 shadow-lg shadow-primary/20 hover:scale-105 transition-transform"
-          onClick={handleSave}
-          disabled={saving}
-        >
-          {saving ? <Loader2 className="w-6 h-6 animate-spin" /> : <><Save className="w-5 h-5 ml-2" /> {t('saveInvoice')}</>}
-        </Button>
-      </div>
+      {isLightPlan ? (
+        <LightInvoiceEdit inv={inv} onSaved={handleSaved} />
+      ) : (
+        <PremiumInvoiceEdit inv={inv} customer={customer} invoiceId={invoiceId} onSaved={handleSaved} />
+      )}
     </div>
   );
 }

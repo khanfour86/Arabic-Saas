@@ -1,4 +1,4 @@
-import type { Lang } from './i18n';
+type Lang = 'ar' | 'en';
 
 export interface KuwaitArea {
   value: string;
