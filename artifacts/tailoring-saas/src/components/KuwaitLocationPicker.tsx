@@ -74,7 +74,7 @@ export function KuwaitLocationPicker({
           <SelectTrigger className="bg-muted/50 rounded-xl h-11">
             <SelectValue placeholder={governorate ? 'اختر المنطقة...' : 'اختر المحافظة أولاً'} />
           </SelectTrigger>
-          <SelectContent dir={dir}>
+          <SelectContent dir={dir} className="max-h-48 overflow-y-auto">
             {areas.map(a => (
               <SelectItem key={a} value={a}>
                 {a}
