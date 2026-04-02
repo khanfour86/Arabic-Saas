@@ -11,6 +11,7 @@ export interface CreateShopBody {
   name: string;
   managerName: string;
   phone: string;
+  governorate?: string | null;
   area: string;
   subscriptionStart: Date;
   subscriptionEnd: Date;

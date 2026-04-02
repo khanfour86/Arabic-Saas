@@ -69,6 +69,7 @@ router.post("/owner/shops", requireAuth, requireOwner, async (req, res): Promise
     name: shopData.name,
     managerName: shopData.managerName,
     phone: shopData.phone,
+    governorate: shopData.governorate ?? null,
     area: shopData.area,
     subscriptionStart: shopData.subscriptionStart,
     subscriptionEnd: shopData.subscriptionEnd,
@@ -115,6 +116,7 @@ router.patch("/owner/shops/:shopId", requireAuth, requireOwner, async (req, res)
   if (d.name != null) updateData.name = d.name;
   if (d.managerName != null) updateData.managerName = d.managerName;
   if (d.phone != null) updateData.phone = d.phone;
+  if (d.governorate !== undefined) updateData.governorate = d.governorate ?? null;
   if (d.area != null) updateData.area = d.area;
   if (d.subscriptionStart != null) updateData.subscriptionStart = d.subscriptionStart;
   if (d.subscriptionEnd != null) updateData.subscriptionEnd = d.subscriptionEnd;

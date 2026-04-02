@@ -15,6 +15,8 @@ export interface UpdateShopBody {
   /** @nullable */
   phone?: string | null;
   /** @nullable */
+  governorate?: string | null;
+  /** @nullable */
   area?: string | null;
   /** @nullable */
   subscriptionStart?: Date | null;

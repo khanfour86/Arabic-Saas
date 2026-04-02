@@ -7,6 +7,7 @@ export const shopsTable = pgTable("shops", {
   name: text("name").notNull(),
   managerName: text("manager_name").notNull(),
   phone: text("phone").notNull(),
+  governorate: text("governorate"),
   area: text("area").notNull(),
   subscriptionStart: date("subscription_start").notNull(),
   subscriptionEnd: date("subscription_end").notNull(),

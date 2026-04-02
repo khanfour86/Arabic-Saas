@@ -1,0 +1,90 @@
+In the platform admin user, for the Create Shop form and Edit Shop form, replace the manual text input for location with structured Kuwait location fields.
+
+I want you to fully implement this feature end-to-end.
+
+Requirements:
+
+1. Create a built-in local constants file inside the project that contains:
+   - all 6 Kuwait governorates
+   - a list of their main areas
+   - do NOT use any external API, internet source, or external file
+   - the data must be stored inside the project itself
+
+2. Add a new "governorate" field as a dropdown/select input.
+   The dropdown must include the official Kuwait governorates:
+   - العاصمة
+   - حولي
+   - الفروانية
+   - الأحمدي
+   - الجهراء
+   - مبارك الكبير
+
+3. Add a new "area" field as a searchable autocomplete / combobox.
+   - The user must first choose a governorate
+   - Then the area options must show only the areas related to that governorate
+   - Typing partial Arabic text must filter results
+   - Example: if the selected governorate is "الفروانية" and the user types "الفرو", it should show "الفروانية"
+   - The same applies to all other governorates and areas
+
+4. The area field must NOT allow arbitrary free text saving.
+   - The user can type only for searching/filtering
+   - The saved value must come only from selecting one of the predefined options from the list
+
+5. When the governorate changes:
+   - reset the selected area
+   - clear the previous area search text
+   - prevent invalid area/governorate combinations
+
+6. Add validation:
+   - governorate is required
+   - area is required
+   - area cannot be selected before governorate
+   - form submission must fail if the values are invalid
+
+7. Apply this implementation consistently in:
+   - Create Shop form
+   - Edit Shop form
+   - any shared shop form component if one exists
+
+8. Keep the UI Arabic-friendly and RTL-compatible.
+   - labels in Arabic
+   - proper alignment for Arabic text
+   - clean admin UX
+
+9. Build the implementation in a reusable way.
+   - create a reusable location component if appropriate
+   - keep the location data separate in a constants file
+   - structure the code so that later we can move governorates/areas into the database easily
+
+10. Save both values in the shop record:
+   - governorate
+   - area
+
+11. If the current database schema does not already support these fields, update the schema and all related form handling, validation, and API payloads accordingly.
+
+12. Add a reasonable built-in list of Kuwait areas under each governorate.
+   It does not have to be map-level exhaustive, but it should be a strong practical list of well-known Kuwait areas, enough for real use in Kuwait tailor shops.
+
+Suggested example coverage:
+- العاصمة: الشرق, القبلة, المرقاب, الصالحية, الشامية, الروضة, كيفان, الدسمة, الدعية, قرطبة, الفيحاء, النزهة, العديلية, الخالدية, اليرموك, الشويخ, جابر الأحمد
+- حولي: حولي, السالمية, السرة, الجابرية, مشرف, بيان, الرميثية, سلوى, الشعب, الزهراء, الصديق, السلام, حطين, الشهداء
+- الفروانية: الفروانية, خيطان, جليب الشيوخ, العارضية, العمرية, الرحاب, اشبيلية, الفردوس, صباح الناصر, عبدالله المبارك
+- الأحمدي: الأحمدي, الفحيحيل, المنقف, أبو حليفة, العقيلة, هدية, الرقة, الصباحية, الظهر, الفنطاس, المهبولة, صباح الأحمد, الوفرة
+- الجهراء: الجهراء, الواحة, القصر, النسيم, تيماء, العيون, سعد العبدالله, كبد, العبدلي, الصليبية
+- مبارك الكبير: صباح السالم, المسيلة, أبو فطيرة, العدان, القصور, القرين, مبارك الكبير
+
+Technical notes:
+- If the project already uses shadcn/ui, use:
+  - Select for governorate
+  - Combobox / searchable popover for area
+- If not, implement an equivalent searchable dropdown in the project’s current UI style
+- Make sure the form works well on desktop and mobile
+- Keep the code clean and production-ready
+
+Important behavior:
+- The area options must be available from the first shop ever created
+- Do NOT generate area options from previously created shops
+- Do NOT fetch areas from the internet
+- The list must be predefined inside the app from day one
+
+Please implement the full feature and update all affected files.

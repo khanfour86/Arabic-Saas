@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { KuwaitLocationPicker } from '@/components/KuwaitLocationPicker';
 import { Store, Users, CheckCircle, XCircle, Plus, Loader2, Calendar, Pencil, KeyRound, User, ShieldCheck, Scissors, PhoneCall, AlertCircle } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -275,6 +276,7 @@ function ShopCreateForm({ onSuccess }: { onSuccess: () => void }) {
   const [shopName, setShopName] = useState('');
   const [managerName, setManagerName] = useState('');
   const [phone, setPhone] = useState('');
+  const [governorate, setGovernorate] = useState('');
   const [area, setArea] = useState('');
   const [managerUsername, setManagerUsername] = useState('');
   const [managerPassword, setManagerPassword] = useState('');
@@ -302,6 +304,7 @@ function ShopCreateForm({ onSuccess }: { onSuccess: () => void }) {
     shopName.trim().length > 0 &&
     managerName.trim().length > 0 &&
     phone.length === 8 &&
+    governorate.trim().length > 0 &&
     area.trim().length > 0 &&
     subscriptionStart.length > 0 &&
     managerUsername.trim().length > 0 &&
@@ -327,6 +330,7 @@ function ShopCreateForm({ onSuccess }: { onSuccess: () => void }) {
         name: shopName,
         managerName,
         phone,
+        governorate,
         area,
         subscriptionStart,
         subscriptionEnd,
@@ -382,12 +386,13 @@ function ShopCreateForm({ onSuccess }: { onSuccess: () => void }) {
           <FieldStatus checking={phoneCheck.checking} taken={phoneCheck.taken} takenMsg={t('phoneTaken')} checkingMsg={t('checking')} />
         </div>
 
-        <div className="space-y-2">
-          <label className="text-sm font-bold">{t('area')}</label>
-          <Input
-            value={area}
-            onChange={e => setArea(e.target.value)}
-            className="bg-muted/50 rounded-xl"
+        <div className="space-y-2 md:col-span-2">
+          <KuwaitLocationPicker
+            governorate={governorate}
+            area={area}
+            onGovernorateChange={setGovernorate}
+            onAreaChange={setArea}
+            dir={dir}
           />
         </div>
 
@@ -597,9 +602,19 @@ function UserEditRow({ shopId, user, onSaved }: { shopId: number; user: any; onS
 function ShopEditDialog({ shop }: { shop: any }) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<'info' | 'users'>('info');
+  const [editGovernorate, setEditGovernorate] = useState<string>(shop.governorate ?? '');
+  const [editArea, setEditArea] = useState<string>(shop.area ?? '');
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { t, dir } = useTranslation();
+
+  // Re-sync location state whenever the dialog opens (in case the shop data was updated)
+  useEffect(() => {
+    if (open) {
+      setEditGovernorate(shop.governorate ?? '');
+      setEditArea(shop.area ?? '');
+    }
+  }, [open, shop.governorate, shop.area]);
 
   const { data: usersData, refetch: refetchUsers } = useQuery({
     queryKey: [`/api/owner/shops/${shop.id}/users`],
@@ -632,7 +647,8 @@ function ShopEditDialog({ shop }: { shop: any }) {
         name: fd.get('name') as string,
         managerName: fd.get('managerName') as string,
         phone: fd.get('phone') as string,
-        area: fd.get('area') as string,
+        governorate: editGovernorate || null,
+        area: editArea,
         subscriptionStart: fd.get('subscriptionStart') as string,
         subscriptionEnd: fd.get('subscriptionEnd') as string,
         subscriptionStatus: fd.get('subscriptionStatus') as any,
@@ -681,9 +697,14 @@ function ShopEditDialog({ shop }: { shop: any }) {
                   <label className="text-sm font-bold">{t('phone')}</label>
                   <Input name="phone" defaultValue={shop.phone} required className="bg-muted/50 rounded-xl" dir="ltr" />
                 </div>
-                <div className="space-y-1.5">
-                  <label className="text-sm font-bold">{t('area')}</label>
-                  <Input name="area" defaultValue={shop.area} required className="bg-muted/50 rounded-xl" />
+                <div className="space-y-1.5 md:col-span-2">
+                  <KuwaitLocationPicker
+                    governorate={editGovernorate}
+                    area={editArea}
+                    onGovernorateChange={(v) => { setEditGovernorate(v); setEditArea(''); }}
+                    onAreaChange={setEditArea}
+                    dir={dir}
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-sm font-bold">{t('subscriptionStart')}</label>
