@@ -112,7 +112,7 @@ export function KuwaitLocationPicker({
                 className="h-9 text-gray-100 placeholder:text-gray-400 border-b border-white/10"
                 dir={dir}
               />
-              <CommandList className="max-h-60 overflow-y-auto">
+              <CommandList className="max-h-60 overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
                 <CommandEmpty className="py-3 text-center text-sm text-gray-400">لا توجد نتائج</CommandEmpty>
                 <CommandGroup>
                   {areas.map(a => (
