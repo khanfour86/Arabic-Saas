@@ -80,7 +80,7 @@ export function OwnerShops() {
   const [search, setSearch] = useState('');
   const { data, isLoading } = useListShops({ status: statusFilter === 'all' ? null : statusFilter });
   const [createOpen, setCreateOpen] = useState(false);
-  const { t, dir } = useTranslation();
+  const { t, dir, lang } = useTranslation();
 
   const q = search.trim().toLowerCase();
   const filteredShops = q
