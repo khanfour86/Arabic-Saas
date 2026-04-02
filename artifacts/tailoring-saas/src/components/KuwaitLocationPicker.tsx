@@ -111,7 +111,7 @@ export function KuwaitLocationPicker({
                 className="h-9 text-gray-100 placeholder:text-gray-400 border-b border-white/10"
                 dir={dir}
               />
-              <CommandList>
+              <CommandList className="max-h-60 overflow-y-auto">
                 <CommandEmpty className="py-3 text-center text-sm text-gray-400">لا توجد نتائج</CommandEmpty>
                 <CommandGroup>
                   {areas.map(a => (
