@@ -102,7 +102,8 @@ export function KuwaitLocationPicker({
             </Button>
           </PopoverTrigger>
           <PopoverContent
-            className="w-[--radix-popover-trigger-width] p-0 rounded-xl border border-white/10 bg-gray-900 text-gray-100 shadow-2xl"
+            className="p-0 rounded-xl border border-white/10 bg-gray-900 text-gray-100 shadow-2xl"
+            style={{ width: 'var(--radix-popover-trigger-width)' }}
             dir={dir}
           >
             <Command className="bg-transparent text-gray-100">
