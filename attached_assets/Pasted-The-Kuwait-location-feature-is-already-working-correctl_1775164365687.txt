@@ -1,0 +1,158 @@
+The Kuwait location feature is already working correctly in Arabic.
+Now I want you to update it so the platform fully supports both Arabic and English for governorate and area names.
+
+IMPORTANT RULES:
+1. Do NOT change the existing feature logic.
+2. Do NOT remove or rename any current Arabic governorate or area names.
+3. Do NOT regenerate, rewrite, or invent any new names.
+4. Use EXACTLY the Arabic and English names provided below.
+5. Keep all current saved Arabic values working exactly as they are.
+6. Only add bilingual display support so Arabic UI shows Arabic names and English UI shows English names.
+7. Do NOT use internet, translation APIs, or external files.
+8. Keep everything built into the project.
+
+Goal:
+- Arabic UI must show Arabic governorate and area names.
+- English UI must show the exact English governorate and area names provided below.
+- Existing saved shop records must continue working without data loss.
+- The current create shop and edit shop location picker must continue working the same way.
+
+Implementation requirements:
+
+1. Update the Kuwait locations data structure so every governorate and area supports:
+   - stable internal value if needed
+   - Arabic label
+   - English label
+
+2. Use the exact Arabic and English mappings below.
+   Do not change spelling.
+   Do not substitute any names.
+   Do not translate differently.
+
+3. Update the KuwaitLocationPicker component so:
+   - Arabic UI displays labelAr
+   - English UI displays labelEn
+   - search filters based on the currently displayed language
+   - existing governorate/area selection logic stays unchanged
+   - changing governorate still resets area
+   - area options still depend on selected governorate
+   - no arbitrary free text saving is allowed
+
+4. Apply this to:
+   - Create Shop form
+   - Edit Shop form
+   - any shop details/list display that shows governorate or area values
+
+5. Backward compatibility:
+   - Existing records that store Arabic values must continue working
+   - Add compatibility mapping if needed so old Arabic saved values display correctly in English UI
+   - Do not break existing records
+   - Do not require manual data cleanup
+
+6. Keep code reusable, clean, and production-ready.
+
+Use EXACTLY these governorate mappings:
+
+العاصمة = Capital
+حولي = Hawalli
+الفروانية = Farwaniya
+الأحمدي = Ahmadi
+الجهراء = Jahra
+مبارك الكبير = Mubarak Al-Kabeer
+
+Use EXACTLY these area mappings:
+
+[العاصمة]
+الشرق = Sharq
+القبلة = Qibla
+المرقاب = Mirqab
+الصالحية = Salhiya
+الشامية = Shamiya
+الروضة = Rawda
+كيفان = Kaifan
+الدسمة = Dasma
+الدعية = Daiya
+قرطبة = Cordoba
+الفيحاء = Faiha
+النزهة = Nuzha
+العديلية = Adailiya
+الخالدية = Khaldiya
+اليرموك = Yarmouk
+الشويخ = Shuwaikh
+جابر الأحمد = Jaber Al Ahmad
+
+[حولي]
+حولي = Hawalli
+السالمية = Salmiya
+السرة = Surra
+الجابرية = Jabriya
+مشرف = Mishref
+بيان = Bayan
+الرميثية = Rumaithiya
+سلوى = Salwa
+الشعب = Shaab
+الزهراء = Zahra
+الصديق = Siddiq
+السلام = Salam
+حطين = Hittin
+الشهداء = Shuhada
+
+[الفروانية]
+الفروانية = Farwaniya
+خيطان = Khaitan
+جليب الشيوخ = Jleeb Al-Shuyoukh
+العارضية = Ardiya
+العمرية = Omariya
+الرحاب = Rehab
+إشبيلية = Ishbiliya
+الفردوس = Ferdous
+صباح الناصر = Sabah Al Nasser
+عبدالله المبارك = Abdullah Al Mubarak
+
+[الأحمدي]
+الأحمدي = Ahmadi
+الفحيحيل = Fahaheel
+المنقف = Mangaf
+أبو حليفة = Abu Halifa
+العقيلة = Egaila
+هدية = Hadiya
+الرقة = Riqqa
+الصباحية = Sabahiya
+الظهر = Dhaher
+الفنطاس = Fintas
+المهبولة = Mahboula
+صباح الأحمد = Sabah Al Ahmad
+الوفرة = Wafra
+
+[الجهراء]
+الجهراء = Jahra
+الواحة = Waha
+القصر = Qasr
+النسيم = Naseem
+تيماء = Taima
+العيون = Oyoun
+سعد العبدالله = Saad Al Abdullah
+كبد = Kabd
+العبدلي = Abdali
+الصليبية = Sulaibiya
+
+[مبارك الكبير]
+صباح السالم = Sabah Al Salem
+المسيلة = Messila
+أبو فطيرة = Abu Fatira
+العدان = Adan
+القصور = Qusour
+القرين = Qurain
+مبارك الكبير = Mubarak Al-Kabeer
+
+Technical expectations:
+- Keep the current Kuwait location feature structure
+- Only enhance it with bilingual labels
+- Do not break existing API behavior unless required for compatibility
+- Preserve current validation behavior
+- Preserve current create/edit functionality
+- Keep the UI Arabic-friendly and English-friendly depending on app language
+
+Final rule:
+Do NOT make your own naming decisions.
+Use only the exact names I provided above.

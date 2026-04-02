@@ -9,6 +9,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
+import { useTranslation } from '@/lib/i18n';
 import { KUWAIT_GOVERNORATES, getAreasByGovernorate } from '@/lib/kuwaitLocations';
 
 interface KuwaitLocationPickerProps {
@@ -30,6 +31,7 @@ export function KuwaitLocationPicker({
   disabled = false,
   className,
 }: KuwaitLocationPickerProps) {
+  const { lang } = useTranslation();
   const [areaOpen, setAreaOpen] = useState(false);
   const [search, setSearch] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
@@ -37,8 +39,16 @@ export function KuwaitLocationPicker({
 
   const areas = getAreasByGovernorate(governorate);
   const filtered = search.trim()
-    ? areas.filter(a => a.includes(search.trim()))
+    ? areas.filter(a => {
+        const label = lang === 'en' ? a.labelEn : a.labelAr;
+        return label.toLowerCase().includes(search.trim().toLowerCase());
+      })
     : areas;
+
+  const selectedAreaObj = areas.find(a => a.value === area);
+  const selectedAreaLabel = selectedAreaObj
+    ? (lang === 'en' ? selectedAreaObj.labelEn : selectedAreaObj.labelAr)
+    : '';
 
   const handleGovernorateChange = (value: string) => {
     onGovernorateChange(value);
@@ -59,7 +69,6 @@ export function KuwaitLocationPicker({
     setTimeout(() => inputRef.current?.focus(), 50);
   };
 
-  // Close on outside click
   useEffect(() => {
     if (!areaOpen) return;
     const handleClick = (e: MouseEvent) => {
@@ -72,12 +81,23 @@ export function KuwaitLocationPicker({
     return () => document.removeEventListener('mousedown', handleClick);
   }, [areaOpen]);
 
+  const govPlaceholder = lang === 'en' ? 'Select governorate...' : 'اختر المحافظة...';
+  const areaPlaceholder = governorate
+    ? (lang === 'en' ? 'Select area...' : 'اختر المنطقة...')
+    : (lang === 'en' ? 'Select governorate first' : 'اختر المحافظة أولاً');
+  const searchPlaceholder = lang === 'en' ? 'Search area...' : 'ابحث عن المنطقة...';
+  const noResults = lang === 'en' ? 'No results' : 'لا توجد نتائج';
+  const govHint = lang === 'en' ? 'Governorate is required' : 'يجب اختيار المحافظة أولاً';
+  const areaHint = lang === 'en' ? 'Select an area from the list' : 'اختر المنطقة من القائمة';
+  const govLabel = lang === 'en' ? 'Governorate' : 'المحافظة';
+  const areaLabel = lang === 'en' ? 'Area' : 'المنطقة';
+
   return (
     <div className={cn('grid grid-cols-1 md:grid-cols-2 gap-4', className)}>
       {/* Governorate Select */}
       <div className="space-y-2">
         <label className="text-sm font-bold">
-          المحافظة <span className="text-destructive">*</span>
+          {govLabel} <span className="text-destructive">*</span>
         </label>
         <Select
           value={governorate}
@@ -86,28 +106,27 @@ export function KuwaitLocationPicker({
           dir={dir}
         >
           <SelectTrigger className="bg-muted/50 rounded-xl h-11">
-            <SelectValue placeholder="اختر المحافظة..." />
+            <SelectValue placeholder={govPlaceholder} />
           </SelectTrigger>
           <SelectContent dir={dir}>
             {KUWAIT_GOVERNORATES.map(gov => (
               <SelectItem key={gov.value} value={gov.value}>
-                {gov.label}
+                {lang === 'en' ? gov.labelEn : gov.labelAr}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
         {!governorate && (
-          <p className="text-xs text-muted-foreground">يجب اختيار المحافظة أولاً</p>
+          <p className="text-xs text-muted-foreground">{govHint}</p>
         )}
       </div>
 
       {/* Area custom dropdown */}
       <div className="space-y-2">
         <label className="text-sm font-bold">
-          المنطقة <span className="text-destructive">*</span>
+          {areaLabel} <span className="text-destructive">*</span>
         </label>
         <div ref={containerRef} className="relative">
-          {/* Trigger button */}
           <button
             type="button"
             onClick={handleOpen}
@@ -121,22 +140,20 @@ export function KuwaitLocationPicker({
             )}
           >
             <span className="truncate">
-              {area || (governorate ? 'اختر المنطقة...' : 'اختر المحافظة أولاً')}
+              {selectedAreaLabel || areaPlaceholder}
             </span>
             <ChevronsUpDown className="w-4 h-4 opacity-50 shrink-0 ms-2" />
           </button>
 
-          {/* Dropdown */}
           {areaOpen && (
             <div
               className="absolute z-50 top-[calc(100%+4px)] left-0 right-0 rounded-xl border border-white/10 bg-gray-900 text-gray-100 shadow-2xl"
               dir={dir}
             >
-              {/* Search */}
               <div className="p-2 border-b border-white/10">
                 <Input
                   ref={inputRef}
-                  placeholder="ابحث عن المنطقة..."
+                  placeholder={searchPlaceholder}
                   value={search}
                   onChange={e => setSearch(e.target.value)}
                   className="h-8 bg-white/10 border-white/20 text-gray-100 placeholder:text-gray-400 rounded-lg focus-visible:ring-white/30"
@@ -144,36 +161,38 @@ export function KuwaitLocationPicker({
                 />
               </div>
 
-              {/* List */}
               <div
                 style={{ maxHeight: '192px', overflowY: 'auto', overscrollBehavior: 'contain' }}
               >
                 {filtered.length === 0 ? (
-                  <p className="py-4 text-center text-sm text-gray-400">لا توجد نتائج</p>
+                  <p className="py-4 text-center text-sm text-gray-400">{noResults}</p>
                 ) : (
-                  filtered.map(a => (
-                    <button
-                      key={a}
-                      type="button"
-                      onMouseDown={e => e.preventDefault()}
-                      onClick={() => handleSelect(a)}
-                      className={cn(
-                        'w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-100 hover:bg-white/10 transition-colors',
-                        dir === 'rtl' ? 'text-right' : 'text-left',
-                        area === a && 'bg-white/10'
-                      )}
-                    >
-                      <Check className={cn('h-4 w-4 shrink-0', area === a ? 'opacity-100' : 'opacity-0')} />
-                      {a}
-                    </button>
-                  ))
+                  filtered.map(a => {
+                    const label = lang === 'en' ? a.labelEn : a.labelAr;
+                    return (
+                      <button
+                        key={a.value}
+                        type="button"
+                        onMouseDown={e => e.preventDefault()}
+                        onClick={() => handleSelect(a.value)}
+                        className={cn(
+                          'w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-100 hover:bg-white/10 transition-colors',
+                          dir === 'rtl' ? 'text-right' : 'text-left',
+                          area === a.value && 'bg-white/10'
+                        )}
+                      >
+                        <Check className={cn('h-4 w-4 shrink-0', area === a.value ? 'opacity-100' : 'opacity-0')} />
+                        {label}
+                      </button>
+                    );
+                  })
                 )}
               </div>
             </div>
           )}
         </div>
         {governorate && !area && (
-          <p className="text-xs text-muted-foreground">اختر المنطقة من القائمة</p>
+          <p className="text-xs text-muted-foreground">{areaHint}</p>
         )}
       </div>
     </div>

@@ -1,146 +1,189 @@
+import type { Lang } from './i18n';
+
+export interface KuwaitArea {
+  value: string;
+  labelAr: string;
+  labelEn: string;
+}
+
 export interface KuwaitGovernorate {
   value: string;
-  label: string;
-  areas: string[];
+  labelAr: string;
+  labelEn: string;
+  areas: KuwaitArea[];
+}
+
+function area(value: string, labelEn: string): KuwaitArea {
+  return { value, labelAr: value, labelEn };
+}
+
+function areaAr(value: string): KuwaitArea {
+  return { value, labelAr: value, labelEn: value };
 }
 
 export const KUWAIT_GOVERNORATES: KuwaitGovernorate[] = [
   {
     value: 'العاصمة',
-    label: 'العاصمة',
+    labelAr: 'العاصمة',
+    labelEn: 'Capital',
     areas: [
-      'الشرق',
-      'القبلة',
-      'المرقاب',
-      'الصالحية',
-      'الشامية',
-      'الروضة',
-      'كيفان',
-      'الدسمة',
-      'الدعية',
-      'قرطبة',
-      'الفيحاء',
-      'النزهة',
-      'العديلية',
-      'الخالدية',
-      'اليرموك',
-      'الشويخ الصناعية',
-      'جابر الأحمد',
-      'السرة',
-      'المنصورية',
-      'ضاحية عبدالله السالم',
-      'المطار',
-      'غرناطة',
-      'أمغرة',
+      area('الشرق', 'Sharq'),
+      area('القبلة', 'Qibla'),
+      area('المرقاب', 'Mirqab'),
+      area('الصالحية', 'Salhiya'),
+      area('الشامية', 'Shamiya'),
+      area('الروضة', 'Rawda'),
+      area('كيفان', 'Kaifan'),
+      area('الدسمة', 'Dasma'),
+      area('الدعية', 'Daiya'),
+      area('قرطبة', 'Cordoba'),
+      area('الفيحاء', 'Faiha'),
+      area('النزهة', 'Nuzha'),
+      area('العديلية', 'Adailiya'),
+      area('الخالدية', 'Khaldiya'),
+      area('اليرموك', 'Yarmouk'),
+      area('الشويخ الصناعية', 'Shuwaikh'),
+      area('جابر الأحمد', 'Jaber Al Ahmad'),
+      areaAr('السرة'),
+      areaAr('المنصورية'),
+      areaAr('ضاحية عبدالله السالم'),
+      areaAr('المطار'),
+      areaAr('غرناطة'),
+      areaAr('أمغرة'),
     ],
   },
   {
     value: 'حولي',
-    label: 'حولي',
+    labelAr: 'حولي',
+    labelEn: 'Hawalli',
     areas: [
-      'حولي',
-      'السالمية',
-      'السرة',
-      'الجابرية',
-      'مشرف',
-      'بيان',
-      'الرميثية',
-      'سلوى',
-      'الشعب',
-      'الزهراء',
-      'الصديق',
-      'السلام',
-      'حطين',
-      'الشهداء',
-      'النقرة',
-      'الأندلس',
-      'البدع',
-      'ميدان حولي',
+      area('حولي', 'Hawalli'),
+      area('السالمية', 'Salmiya'),
+      area('السرة', 'Surra'),
+      area('الجابرية', 'Jabriya'),
+      area('مشرف', 'Mishref'),
+      area('بيان', 'Bayan'),
+      area('الرميثية', 'Rumaithiya'),
+      area('سلوى', 'Salwa'),
+      area('الشعب', 'Shaab'),
+      area('الزهراء', 'Zahra'),
+      area('الصديق', 'Siddiq'),
+      area('السلام', 'Salam'),
+      area('حطين', 'Hittin'),
+      area('الشهداء', 'Shuhada'),
+      areaAr('النقرة'),
+      areaAr('الأندلس'),
+      areaAr('البدع'),
+      areaAr('ميدان حولي'),
     ],
   },
   {
     value: 'الفروانية',
-    label: 'الفروانية',
+    labelAr: 'الفروانية',
+    labelEn: 'Farwaniya',
     areas: [
-      'الفروانية',
-      'خيطان',
-      'جليب الشيوخ',
-      'العارضية',
-      'العمرية',
-      'الرحاب',
-      'إشبيلية',
-      'الفردوس',
-      'صباح الناصر',
-      'عبدالله المبارك',
-      'أبو فطيرة',
-      'الرابية',
-      'أنديلس',
-      'الضجيج',
-      'النهضة',
+      area('الفروانية', 'Farwaniya'),
+      area('خيطان', 'Khaitan'),
+      area('جليب الشيوخ', 'Jleeb Al-Shuyoukh'),
+      area('العارضية', 'Ardiya'),
+      area('العمرية', 'Omariya'),
+      area('الرحاب', 'Rehab'),
+      area('إشبيلية', 'Ishbiliya'),
+      area('الفردوس', 'Ferdous'),
+      area('صباح الناصر', 'Sabah Al Nasser'),
+      area('عبدالله المبارك', 'Abdullah Al Mubarak'),
+      area('أبو فطيرة', 'Abu Fatira'),
+      areaAr('الرابية'),
+      areaAr('أنديلس'),
+      areaAr('الضجيج'),
+      areaAr('النهضة'),
     ],
   },
   {
     value: 'الأحمدي',
-    label: 'الأحمدي',
+    labelAr: 'الأحمدي',
+    labelEn: 'Ahmadi',
     areas: [
-      'الأحمدي',
-      'الفحيحيل',
-      'المنقف',
-      'أبو حليفة',
-      'العقيلة',
-      'هدية',
-      'الرقة',
-      'الصباحية',
-      'الظهر',
-      'الفنطاس',
-      'المهبولة',
-      'صباح الأحمد',
-      'الوفرة',
-      'بنيدر',
-      'الزور',
-      'ميناء عبدالله',
-      'المقوع',
-      'الجليعة',
+      area('الأحمدي', 'Ahmadi'),
+      area('الفحيحيل', 'Fahaheel'),
+      area('المنقف', 'Mangaf'),
+      area('أبو حليفة', 'Abu Halifa'),
+      area('العقيلة', 'Egaila'),
+      area('هدية', 'Hadiya'),
+      area('الرقة', 'Riqqa'),
+      area('الصباحية', 'Sabahiya'),
+      area('الظهر', 'Dhaher'),
+      area('الفنطاس', 'Fintas'),
+      area('المهبولة', 'Mahboula'),
+      area('صباح الأحمد', 'Sabah Al Ahmad'),
+      area('الوفرة', 'Wafra'),
+      areaAr('بنيدر'),
+      areaAr('الزور'),
+      areaAr('ميناء عبدالله'),
+      areaAr('المقوع'),
+      areaAr('الجليعة'),
     ],
   },
   {
     value: 'الجهراء',
-    label: 'الجهراء',
+    labelAr: 'الجهراء',
+    labelEn: 'Jahra',
     areas: [
-      'الجهراء',
-      'الواحة',
-      'القصر',
-      'النسيم',
-      'تيماء',
-      'العيون',
-      'سعد العبدالله',
-      'كبد',
-      'العبدلي',
-      'الصليبية',
-      'قصر',
-      'السليبيخات',
-      'أمغرة',
-      'الروضتين',
+      area('الجهراء', 'Jahra'),
+      area('الواحة', 'Waha'),
+      area('القصر', 'Qasr'),
+      area('النسيم', 'Naseem'),
+      area('تيماء', 'Taima'),
+      area('العيون', 'Oyoun'),
+      area('سعد العبدالله', 'Saad Al Abdullah'),
+      area('كبد', 'Kabd'),
+      area('العبدلي', 'Abdali'),
+      area('الصليبية', 'Sulaibiya'),
+      areaAr('قصر'),
+      areaAr('السليبيخات'),
+      areaAr('أمغرة'),
+      areaAr('الروضتين'),
     ],
   },
   {
     value: 'مبارك الكبير',
-    label: 'مبارك الكبير',
+    labelAr: 'مبارك الكبير',
+    labelEn: 'Mubarak Al-Kabeer',
     areas: [
-      'صباح السالم',
-      'المسيلة',
-      'أبو فطيرة',
-      'العدان',
-      'القصور',
-      'القرين',
-      'مبارك الكبير',
-      'ضاحية صباح السالم',
-      'فنيطيس',
+      area('صباح السالم', 'Sabah Al Salem'),
+      area('المسيلة', 'Messila'),
+      area('أبو فطيرة', 'Abu Fatira'),
+      area('العدان', 'Adan'),
+      area('القصور', 'Qusour'),
+      area('القرين', 'Qurain'),
+      area('مبارك الكبير', 'Mubarak Al-Kabeer'),
+      areaAr('ضاحية صباح السالم'),
+      areaAr('فنيطيس'),
     ],
   },
 ];
 
-export function getAreasByGovernorate(governorate: string): string[] {
+export function getAreasByGovernorate(governorate: string): KuwaitArea[] {
   const gov = KUWAIT_GOVERNORATES.find(g => g.value === governorate);
   return gov?.areas ?? [];
+}
+
+export function getGovernorateLabel(value: string, lang: Lang): string {
+  const gov = KUWAIT_GOVERNORATES.find(g => g.value === value);
+  if (!gov) return value;
+  return lang === 'en' ? gov.labelEn : gov.labelAr;
+}
+
+export function getAreaLabel(value: string, lang: Lang): string {
+  for (const gov of KUWAIT_GOVERNORATES) {
+    const a = gov.areas.find(a => a.value === value);
+    if (a) return lang === 'en' ? a.labelEn : a.labelAr;
+  }
+  return value;
+}
+
+export function getLocationLabel(governorate: string, areaValue: string, lang: Lang): string {
+  const govLabel = getGovernorateLabel(governorate, lang);
+  const areaLabel = getAreaLabel(areaValue, lang);
+  return `${areaLabel} - ${govLabel}`;
 }

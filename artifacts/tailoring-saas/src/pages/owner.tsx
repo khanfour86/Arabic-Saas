@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { KuwaitLocationPicker } from '@/components/KuwaitLocationPicker';
+import { getAreaLabel, getGovernorateLabel } from '@/lib/kuwaitLocations';
 import { Store, Users, CheckCircle, XCircle, Plus, Loader2, Calendar, Pencil, KeyRound, User, ShieldCheck, Scissors, PhoneCall, AlertCircle } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -17,7 +18,7 @@ import { useToast } from '@/hooks/use-toast';
 
 export function OwnerDashboard() {
   const { data: stats, isLoading } = useGetOwnerStats();
-  const { t } = useTranslation();
+  const { t, lang } = useTranslation();
 
   if (isLoading) return <div className="flex justify-center p-12"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
   if (!stats) return null;
@@ -170,7 +171,7 @@ export function OwnerShops() {
                   <div>
                     <h3 className="font-bold text-lg">{shop.name}</h3>
                     <div className="text-sm text-muted-foreground flex items-center gap-3 mt-1 flex-wrap">
-                      <span>{shop.area}</span>
+                      <span>{getAreaLabel(shop.area, lang)}</span>
                       <span>•</span>
                       <span dir="ltr">{shop.phone}</span>
                       <span>•</span>
