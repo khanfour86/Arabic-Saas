@@ -118,7 +118,7 @@ All routes under `/api/`:
 - `GET /api/shop/invoices/:invoiceId`
 - `PATCH /api/shop/invoices/:invoiceId`
 - `POST /api/shop/invoices/:invoiceId/deliver` (manager/reception only)
-- `POST /api/shop/invoices/:invoiceId/complete-stage` (tailor/manager) — advance stage, record in stage_history
+- `POST /api/shop/invoices/:invoiceId/complete-stage` (tailor/manager) — advance stage, record in stage_history. Supports partial qty (body: {qty}). Response: {completedQty, completedStage, nextStage, isPartial, isReady, stageCounts}
 
 ### Shop — Workflow & Tailor (requires shop staff)
 - `GET /api/shop/workflow` (manager only) — stage counts + invoice list with ?stage=, ?invoiceNumber= filters

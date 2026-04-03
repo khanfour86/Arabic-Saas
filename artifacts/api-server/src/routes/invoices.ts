@@ -4,7 +4,7 @@ import { eq, and, desc, sql } from "drizzle-orm";
 import { type AuthUser } from "../lib/auth";
 import { isShopUser, isManagerOrReception, requireActiveShop } from "../lib/shopMiddleware";
 import { requireAuth, requireShopRole } from "../lib/auth";
-import { getActiveStages, getNextStage } from "../lib/stageHelpers";
+import { getActiveStages, getNextStage, fetchCompletedPerStage, computeStageCounts, getEarliestActiveStage } from "../lib/stageHelpers";
 import { validateProfileOwnership } from "../lib/profileValidation";
 
 const router: IRouter = Router();
@@ -389,35 +389,55 @@ router.post("/shop/invoices/:invoiceId/complete-stage", requireAuth, requireShop
     return;
   }
 
-  if (!invoice.currentStage) {
-    res.status(400).json({ error: "لا توجد مرحلة نشطة لهذه الفاتورة حالياً" });
+  // ── Compute active stages and piece distribution from history ──────────
+  const activeStages = await getActiveStages(user.shopId!);
+
+  if (activeStages.length === 0) {
+    res.status(400).json({ error: "لا توجد مراحل نشطة في هذا المحل (لا يوجد خياطون مرتبطون بمراحل)" });
     return;
   }
 
-  if (user.role === 'tailor') {
-    const [tailorUser] = await db.select({ tailorRoles: usersTable.tailorRoles })
-      .from(usersTable).where(eq(usersTable.id, user.id));
-    if (!tailorUser?.tailorRoles?.includes(invoice.currentStage)) {
-      res.status(403).json({ error: "ليس لديك صلاحية إنهاء هذه المرحلة" });
-      return;
-    }
-  }
-
-  // Compute quantity availability
   const subOrders = await db.select({ quantity: subOrdersTable.quantity })
     .from(subOrdersTable)
     .where(and(eq(subOrdersTable.shopId, user.shopId!), eq(subOrdersTable.invoiceId, id)));
   const totalQty = subOrders.reduce((s, so) => s + so.quantity, 0);
-  const inProgressQty = Math.max(0, totalQty - (invoice.readyQty ?? 0) - (invoice.deliveredQty ?? 0));
-  const alreadyProcessed = invoice.qtyProcessed ?? 0;
-  const availableAtStage = Math.max(0, inProgressQty - alreadyProcessed);
 
+  const completedPerStage = await fetchCompletedPerStage(id);
+  const stageCounts = computeStageCounts(totalQty, activeStages, completedPerStage);
+
+  // The tailor's requested stage: for tailors, must be in their roles; for managers, any stage
+  let expectedStage: string;
+  if (user.role === 'tailor') {
+    const [tailorUser] = await db.select({ tailorRoles: usersTable.tailorRoles })
+      .from(usersTable).where(eq(usersTable.id, user.id));
+    const myRoles: string[] = tailorUser?.tailorRoles ?? [];
+
+    // Find which of the tailor's stages has pieces available
+    const stageWithPieces = myRoles.find(r => activeStages.includes(r) && (stageCounts[r] ?? 0) > 0);
+    if (!stageWithPieces) {
+      res.status(400).json({ error: "لا توجد قطع متاحة في مراحلك الحالية" });
+      return;
+    }
+    expectedStage = stageWithPieces;
+  } else {
+    // Manager: use the current stage on the invoice, or earliest stage with pieces
+    const currentStageWithPieces = invoice.currentStage && (stageCounts[invoice.currentStage] ?? 0) > 0
+      ? invoice.currentStage
+      : getEarliestActiveStage(stageCounts, activeStages);
+    if (!currentStageWithPieces) {
+      res.status(400).json({ error: "لا توجد قطع متاحة لإنهاء أي مرحلة" });
+      return;
+    }
+    expectedStage = currentStageWithPieces;
+  }
+
+  const availableAtStage = stageCounts[expectedStage] ?? 0;
   if (availableAtStage <= 0) {
     res.status(400).json({ error: "لا توجد قطع متاحة لإنهاء هذه المرحلة" });
     return;
   }
 
-  // Parse requested qty — default = complete all available (backward compat)
+  // Parse requested qty — default = complete all available
   const rawQty = req.body.qty != null ? parseInt(req.body.qty, 10) : availableAtStage;
   if (!rawQty || rawQty <= 0 || rawQty > availableAtStage) {
     res.status(400).json({ error: `الكمية غير صالحة. المتاح: ${availableAtStage}` });
@@ -425,12 +445,10 @@ router.post("/shop/invoices/:invoiceId/complete-stage", requireAuth, requireShop
   }
   const completedQty = rawQty;
 
-  const activeStages = await getActiveStages(user.shopId!);
-  const expectedStage = invoice.currentStage!;
   const nextStage = getNextStage(expectedStage, activeStages);
   const isLastStage = !nextStage;
 
-  let transactionResult: { updated: any; isReady: boolean; isPartial: boolean };
+  let transactionResult: { updated: any; isReady: boolean; isPartial: boolean; stageCounts: Record<string, number> };
   try {
     transactionResult = await db.transaction(async (tx) => {
       const [locked] = await tx.select()
@@ -438,14 +456,28 @@ router.post("/shop/invoices/:invoiceId/complete-stage", requireAuth, requireShop
         .where(and(eq(invoicesTable.shopId, user.shopId!), eq(invoicesTable.id, id)))
         .for('update');
 
-      if (!locked || locked.currentStage !== expectedStage) {
-        const err: any = new Error("تم إنهاء هذه المرحلة مسبقاً");
+      if (!locked) {
+        const err: any = new Error("الفاتورة غير موجودة");
         err.code = 'STAGE_ALREADY_COMPLETED';
         throw err;
       }
 
-      // Re-compute inside transaction with locked data
-      const lockedAvailable = Math.max(0, inProgressQty - (locked.qtyProcessed ?? 0));
+      // Re-verify inside transaction (race condition protection)
+      const lockedHistoryRows = await tx.select({ stage: stageHistoryTable.stage, qty: stageHistoryTable.qty })
+        .from(stageHistoryTable)
+        .where(eq(stageHistoryTable.invoiceId, id));
+      const lockedCompleted: Record<string, number> = {};
+      for (const row of lockedHistoryRows) {
+        if (row.qty) lockedCompleted[row.stage] = (lockedCompleted[row.stage] ?? 0) + row.qty;
+      }
+      const lockedCounts = computeStageCounts(totalQty, activeStages, lockedCompleted);
+      const lockedAvailable = lockedCounts[expectedStage] ?? 0;
+
+      if (lockedAvailable <= 0) {
+        const err: any = new Error("لا توجد قطع متاحة في هذه المرحلة");
+        err.code = 'STAGE_ALREADY_COMPLETED';
+        throw err;
+      }
       if (completedQty > lockedAvailable) {
         const err: any = new Error(`الكمية المطلوبة (${completedQty}) تتجاوز المتاح (${lockedAvailable})`);
         err.code = 'QTY_EXCEEDED';
@@ -461,44 +493,51 @@ router.post("/shop/invoices/:invoiceId/complete-stage", requireAuth, requireShop
         qty: completedQty,
       });
 
-      const newQtyProcessed = (locked.qtyProcessed ?? 0) + completedQty;
-      const newReadyQty = isLastStage ? (locked.readyQty ?? 0) + completedQty : (locked.readyQty ?? 0);
-      const allPiecesCompletedStage = newQtyProcessed >= inProgressQty;
+      // ── New logic: pieces move forward immediately ──────────────────────
+      // Re-read history INSIDE transaction (includes the row just inserted)
+      const historyRows = await tx.select({ stage: stageHistoryTable.stage, qty: stageHistoryTable.qty })
+        .from(stageHistoryTable)
+        .where(eq(stageHistoryTable.invoiceId, id));
+
+      const completedPerStage: Record<string, number> = {};
+      for (const row of historyRows) {
+        if (row.qty) completedPerStage[row.stage] = (completedPerStage[row.stage] ?? 0) + row.qty;
+      }
+
+      const stageCounts = computeStageCounts(totalQty, activeStages, completedPerStage);
+      const newCurrentStage = getEarliestActiveStage(stageCounts, activeStages);
+
+      const newReadyQty = isLastStage
+        ? (locked.readyQty ?? 0) + completedQty
+        : (locked.readyQty ?? 0);
 
       const updateObj: any = {
-        qtyProcessed: newQtyProcessed,
+        currentStage: newCurrentStage,
+        qtyProcessed: 0,  // qtyProcessed is replaced by history-based calculation
         readyQty: newReadyQty,
       };
 
-      if (allPiecesCompletedStage) {
-        if (nextStage) {
-          updateObj.currentStage = nextStage;
-          updateObj.qtyProcessed = 0;
-        } else {
-          updateObj.currentStage = null;
-          updateObj.qtyProcessed = 0;
-        }
-      }
-
-      // Check if ALL pieces are now accounted for (ready + delivered = total)
-      const newInProgressQty = Math.max(0, totalQty - newReadyQty - (locked.deliveredQty ?? 0));
+      // Check if ALL pieces are now done (ready + delivered = total)
+      const allDone = (newReadyQty + (locked.deliveredQty ?? 0)) >= totalQty;
       let isReady = false;
-      if (newInProgressQty === 0 && newReadyQty > 0) {
+      if (allDone && newReadyQty > 0) {
         updateObj.status = 'ready';
         updateObj.allSubOrdersReady = true;
         isReady = true;
-        // Mark sub-orders ready
         await tx.update(subOrdersTable)
           .set({ status: 'ready' })
           .where(and(eq(subOrdersTable.shopId, user.shopId!), eq(subOrdersTable.invoiceId, id)));
       }
+
+      // isPartial = there are still pieces at the stage we just worked on
+      const isPartial = (stageCounts[expectedStage] ?? 0) > 0;
 
       const [upd] = await tx.update(invoicesTable)
         .set(updateObj)
         .where(eq(invoicesTable.id, id))
         .returning();
 
-      return { updated: upd, isReady, isPartial: !allPiecesCompletedStage };
+      return { updated: upd, isReady, isPartial, stageCounts };
     });
   } catch (err: any) {
     if (err.code === 'STAGE_ALREADY_COMPLETED') {
@@ -516,10 +555,11 @@ router.post("/shop/invoices/:invoiceId/complete-stage", requireAuth, requireShop
   res.json({
     ...result,
     completedQty,
-    moved: !transactionResult.isReady && !transactionResult.isPartial,
+    completedStage: expectedStage,
+    nextStage: nextStage ?? null,
     isPartial: transactionResult.isPartial,
-    nextStage: !transactionResult.isPartial ? (nextStage ?? null) : null,
     isReady: transactionResult.isReady,
+    stageCounts: transactionResult.stageCounts,
   });
 });
 

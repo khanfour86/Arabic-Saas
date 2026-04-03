@@ -4,7 +4,7 @@ import { eq, and, desc } from "drizzle-orm";
 import { requireAuth, requireShopRole, type AuthUser } from "../lib/auth";
 import { hashPassword } from "../lib/auth";
 import { isShopUser, requireActiveShop } from "../lib/shopMiddleware";
-import { getActiveStages, getNextStage } from "../lib/stageHelpers";
+import { getActiveStages, getNextStage, fetchCompletedPerStageBatch, computeStageCounts } from "../lib/stageHelpers";
 
 const router: IRouter = Router();
 
@@ -120,47 +120,67 @@ router.get("/shop/tailor-queue", requireAuth, requireShopRole("shop_manager", "t
   const [shop] = await db.select({ plan: shopsTable.plan }).from(shopsTable).where(eq(shopsTable.id, user.shopId!));
   const plan = shop?.plan ?? 'premium';
 
-  // Get tailor's roles
-  const [tailorUser] = await db.select({ tailorRoles: usersTable.tailorRoles, role: usersTable.role })
-    .from(usersTable).where(eq(usersTable.id, user.id));
+  // Get tailor's roles and active stages in parallel
+  const [[tailorUser], activeStages] = await Promise.all([
+    db.select({ tailorRoles: usersTable.tailorRoles, role: usersTable.role })
+      .from(usersTable).where(eq(usersTable.id, user.id)),
+    getActiveStages(user.shopId!),
+  ]);
 
   const myRoles: string[] = tailorUser?.tailorRoles ?? [];
 
-  // Manager sees all active invoices; tailor sees only their stages
-  let invoices;
-  if (tailorUser?.role === 'shop_manager') {
-    invoices = await db.select().from(invoicesTable)
-      .where(and(eq(invoicesTable.shopId, user.shopId!), eq(invoicesTable.status, "under_tailoring")))
-      .orderBy(desc(invoicesTable.createdAt));
-  } else {
-    if (myRoles.length === 0) {
-      res.json({ items: [], myRoles: [], plan });
-      return;
-    }
-    invoices = await db.select().from(invoicesTable)
-      .where(and(eq(invoicesTable.shopId, user.shopId!), eq(invoicesTable.status, "under_tailoring")))
-      .orderBy(desc(invoicesTable.createdAt));
-    // Filter to only those in tailor's stages
-    invoices = invoices.filter(i => i.currentStage && myRoles.includes(i.currentStage));
+  if (tailorUser?.role === 'tailor' && myRoles.length === 0) {
+    res.json({ items: [], myRoles: [], activeStages, plan });
+    return;
   }
 
+  // Fetch all active invoices for this shop
+  const allUnderTailoring = await db.select().from(invoicesTable)
+    .where(and(eq(invoicesTable.shopId, user.shopId!), eq(invoicesTable.status, "under_tailoring")))
+    .orderBy(desc(invoicesTable.createdAt));
+
+  // Batch-fetch sub orders for totalQty calculation
+  const allInvoiceIds = allUnderTailoring.map(i => i.id);
+
+  // Batch-fetch stage history for all invoices (one query)
+  const historyByInvoice = await fetchCompletedPerStageBatch(allInvoiceIds);
+
+  // Batch-fetch sub orders for totalQty (will be fetched per invoice anyway for details, but we need qty first for filtering)
   const items = [];
-  for (const invoice of invoices) {
+
+  for (const invoice of allUnderTailoring) {
+    const completedPerStage = historyByInvoice.get(invoice.id) ?? {};
+
+    // Fetch sub orders (needed for qty + premium details)
+    const subOrders = await db.select().from(subOrdersTable)
+      .where(and(eq(subOrdersTable.shopId, user.shopId!), eq(subOrdersTable.invoiceId, invoice.id)))
+      .orderBy(subOrdersTable.subOrderNumber);
+
+    const totalQty = subOrders.reduce((s, so) => s + so.quantity, 0);
+    const stageCounts = computeStageCounts(totalQty, activeStages, completedPerStage);
+
+    // Determine which stage this user is working on and whether this invoice is relevant
+    let stageForThisUser: string | null = null;
+    if (tailorUser?.role === 'shop_manager') {
+      // Manager sees all invoices; show the earliest stage with pieces
+      stageForThisUser = activeStages.find(s => (stageCounts[s] ?? 0) > 0) ?? null;
+      if (!stageForThisUser) continue; // No pieces anywhere — skip
+    } else {
+      // Tailor: show invoice only if any of their stages has pieces
+      stageForThisUser = myRoles.find(r => activeStages.includes(r) && (stageCounts[r] ?? 0) > 0) ?? null;
+      if (!stageForThisUser) continue; // Not relevant for this tailor
+    }
+
+    const availableAtStage = stageCounts[stageForThisUser] ?? 0;
+    const readyQty = invoice.readyQty ?? 0;
+    const deliveredQty = invoice.deliveredQty ?? 0;
+    const inProgressQty = Math.max(0, totalQty - readyQty - deliveredQty);
+
     const [customer] = await db.select().from(customersTable).where(eq(customersTable.id, invoice.customerId));
 
     if (plan === 'light') {
-      // Light plan: only basic info
-      const subOrders = await db.select().from(subOrdersTable)
-        .where(and(eq(subOrdersTable.shopId, user.shopId!), eq(subOrdersTable.invoiceId, invoice.id)));
-
-      const qty = subOrders.reduce((s, so) => s + so.quantity, 0);
       const price = subOrders.reduce((s, so) => s + parseFloat(so.price), 0);
       const paid = subOrders.reduce((s, so) => s + parseFloat(so.paidAmount), 0);
-
-      const lightReadyQty = invoice.readyQty ?? 0;
-      const lightDeliveredQty = invoice.deliveredQty ?? 0;
-      const lightInProgressQty = Math.max(0, qty - lightReadyQty - lightDeliveredQty);
-      const lightAvailable = Math.max(0, lightInProgressQty - (invoice.qtyProcessed ?? 0));
 
       items.push({
         invoiceId: invoice.id,
@@ -170,27 +190,24 @@ router.get("/shop/tailor-queue", requireAuth, requireShopRole("shop_manager", "t
         customerName: customer?.name ?? 'غير معروف',
         customerPhone: customer?.phone ?? '',
         customerIsVip: customer?.isVip ?? false,
-        currentStage: invoice.currentStage ?? null,
+        currentStage: invoice.currentStage ?? stageForThisUser,
         status: invoice.status,
         plan: 'light',
-        quantity: qty,
-        totalQty: qty,
-        readyQty: lightReadyQty,
-        deliveredQty: lightDeliveredQty,
-        inProgressQty: lightInProgressQty,
-        qtyProcessed: invoice.qtyProcessed ?? 0,
-        availableAtStage: lightAvailable,
+        quantity: totalQty,
+        totalQty,
+        readyQty,
+        deliveredQty,
+        inProgressQty,
+        qtyProcessed: 0,
+        availableAtStage,
+        stageBreakdown: stageCounts,
         price,
         paidAmount: paid,
         remainingAmount: price - paid,
         subOrders: [],
       });
     } else {
-      // Premium plan: full details with sub orders + measurements
-      const subOrders = await db.select().from(subOrdersTable)
-        .where(and(eq(subOrdersTable.shopId, user.shopId!), eq(subOrdersTable.invoiceId, invoice.id)))
-        .orderBy(subOrdersTable.subOrderNumber);
-
+      // Premium: full sub-order details with measurements
       const soWithDetails = [];
       for (const so of subOrders) {
         const [profile] = await db.select().from(profilesTable).where(eq(profilesTable.id, so.profileId));
@@ -231,12 +248,6 @@ router.get("/shop/tailor-queue", requireAuth, requireShopRole("shop_manager", "t
         });
       }
 
-      const premQty = soWithDetails.reduce((s, so) => s + so.quantity, 0);
-      const premReadyQty = invoice.readyQty ?? 0;
-      const premDeliveredQty = invoice.deliveredQty ?? 0;
-      const premInProgressQty = Math.max(0, premQty - premReadyQty - premDeliveredQty);
-      const premAvailable = Math.max(0, premInProgressQty - (invoice.qtyProcessed ?? 0));
-
       items.push({
         invoiceId: invoice.id,
         invoiceNumber: invoice.invoiceNumber,
@@ -245,21 +256,22 @@ router.get("/shop/tailor-queue", requireAuth, requireShopRole("shop_manager", "t
         customerName: customer?.name ?? 'غير معروف',
         customerPhone: customer?.phone ?? '',
         customerIsVip: customer?.isVip ?? false,
-        currentStage: invoice.currentStage ?? null,
+        currentStage: invoice.currentStage ?? stageForThisUser,
         status: invoice.status,
         plan: 'premium',
-        totalQty: premQty,
-        readyQty: premReadyQty,
-        deliveredQty: premDeliveredQty,
-        inProgressQty: premInProgressQty,
-        qtyProcessed: invoice.qtyProcessed ?? 0,
-        availableAtStage: premAvailable,
+        totalQty,
+        readyQty,
+        deliveredQty,
+        inProgressQty,
+        qtyProcessed: 0,
+        availableAtStage,
+        stageBreakdown: stageCounts,
         subOrders: soWithDetails,
       });
     }
   }
 
-  res.json({ items, myRoles, plan });
+  res.json({ items, myRoles, activeStages, plan });
 });
 
 // ─── Tailor Completed Orders ──────────────────────────────────────────────────
