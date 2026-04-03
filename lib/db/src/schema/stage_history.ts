@@ -13,6 +13,7 @@ export const stageHistoryTable = pgTable("stage_history", {
   completedBy: integer("completed_by").notNull().references(() => usersTable.id),
   completedAt: timestamp("completed_at", { withTimezone: true }).notNull().defaultNow(),
   nextStage: text("next_stage"),
+  qty: integer("qty").notNull().default(1),
 });
 
 export const insertStageHistorySchema = createInsertSchema(stageHistoryTable).omit({ id: true, completedAt: true });

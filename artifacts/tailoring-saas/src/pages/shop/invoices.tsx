@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
 import { toEnglishDigits } from '@/lib/digits';
-import { useListInvoices, useGetInvoice, useMarkInvoiceDelivered, useGetWhatsappMessage, ListInvoicesStatus } from '@workspace/api-client-react';
+import { useListInvoices, useGetInvoice, useGetWhatsappMessage, ListInvoicesStatus } from '@workspace/api-client-react';
 import { useTranslation } from '@/lib/i18n';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Search, Loader2, FileText, CheckCircle, MessageCircle, ChevronLeft, ChevronRight, Calendar, Scissors, Plus, History, ArrowRight, UserCircle2, X } from 'lucide-react';
+import { Search, Loader2, FileText, CheckCircle, MessageCircle, ChevronLeft, ChevronRight, Calendar, Scissors, Plus, History, ArrowRight, UserCircle2, X, Minus, Package } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Link, useLocation, useParams, useSearch } from 'wouter';
-import { useQueryClient, useQuery } from '@tanstack/react-query';
+import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/lib/auth';
 import { format } from 'date-fns';
@@ -150,6 +150,8 @@ export function InvoiceDetail() {
   const { t, dir } = useTranslation();
   const { user } = useAuth();
   const [, setLocation] = useLocation();
+  const [showDeliverDialog, setShowDeliverDialog] = useState(false);
+  const [deliverQtyInput, setDeliverQtyInput] = useState('');
 
   const canEdit = user?.role === 'shop_manager' || user?.role === 'reception';
 
@@ -159,13 +161,38 @@ export function InvoiceDetail() {
     enabled: !!invoiceId,
   });
 
-  const deliverMutation = useMarkInvoiceDelivered({
-    mutation: {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: [`/api/shop/invoices/${invoiceId}`] });
-        toast({ title: t('invoiceDelivered') });
+  const { data: stageHistory } = useQuery<any[]>({
+    queryKey: [`/api/shop/invoices/${invoiceId}/stage-history`],
+    queryFn: () => fetch(`/api/shop/invoices/${invoiceId}/stage-history`).then(r => r.ok ? r.json() : []),
+    enabled: !!invoiceId,
+  });
+
+  const deliverMutation = useMutation({
+    mutationFn: ({ qty }: { qty: number }) =>
+      fetch(`/api/shop/invoices/${invoiceId}/deliver`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ qty }),
+      }).then(async r => {
+        if (!r.ok) { const e = await r.json(); throw new Error(e.error || 'خطأ'); }
+        return r.json();
+      }),
+    onSuccess: (result) => {
+      setShowDeliverDialog(false);
+      setDeliverQtyInput('');
+      queryClient.invalidateQueries({ queryKey: [`/api/shop/invoices/${invoiceId}`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/shop/invoices/${invoiceId}/stage-history`] });
+      queryClient.invalidateQueries({ queryKey: ['/api/shop/workflow'] });
+      if (result.isFullyDelivered) {
+        toast({ title: t('fullDeliverySuccess') });
+      } else {
+        toast({ title: t('partialDeliverySuccess').replace('{qty}', String(result.deliveredQty ?? '')) });
       }
-    }
+    },
+    onError: (err: any) => {
+      setShowDeliverDialog(false);
+      toast({ title: err.message || 'خطأ', variant: 'destructive' });
+    },
   });
 
   const { refetch: getWhatsapp } = useGetWhatsappMessage(invoiceId, { query: { enabled: false } });
@@ -187,6 +214,23 @@ export function InvoiceDetail() {
   };
 
   const ChevronNav = dir === 'rtl' ? ChevronLeft : ChevronRight;
+
+  // Qty tracking
+  const totalQty: number = (inv as any).totalQty ?? inv.subOrders.reduce((s: number, so: any) => s + (so.quantity ?? 1), 0);
+  const readyQty: number = (inv as any).readyQty ?? 0;
+  const deliveredQty: number = (inv as any).deliveredQty ?? 0;
+  const inProgressQty: number = (inv as any).inProgressQty ?? Math.max(0, totalQty - readyQty - deliveredQty);
+  const hasPartialQty = readyQty > 0 || deliveredQty > 0;
+
+  // Deliver dialog qty
+  const deliverQtyInt = parseInt(toEnglishDigits(deliverQtyInput), 10) || 0;
+  const isDeliverQtyValid = deliverQtyInt > 0 && deliverQtyInt <= readyQty;
+  const isPartialDeliver = deliverQtyInt < readyQty;
+
+  const openDeliverDialog = () => {
+    setDeliverQtyInput(String(readyQty));
+    setShowDeliverDialog(true);
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -234,6 +278,11 @@ export function InvoiceDetail() {
                 {inv.status === 'ready' && inv.allSubOrdersReady && (
                   <Badge className="bg-accent text-accent-foreground border-0">{t('allReady')}</Badge>
                 )}
+                {readyQty > 0 && inv.status !== 'delivered' && (
+                  <Badge className="bg-emerald-400/90 text-emerald-950 border-0 font-bold">
+                    {readyQty} {t('qtyReady')}
+                  </Badge>
+                )}
               </div>
             </div>
             <div className="bg-white text-foreground p-4 rounded-2xl shadow-lg min-w-[250px]">
@@ -248,42 +297,88 @@ export function InvoiceDetail() {
             </div>
           </div>
 
-          <div className="p-8 bg-background">
-            <h3 className="font-display font-bold text-xl mb-4 text-primary">{t('orderDetails')} ({inv.subOrders.length})</h3>
-            <div className="space-y-4">
-              {inv.subOrders.map(sub => (
-                <div key={sub.id} className="bg-white border border-border/50 rounded-2xl p-5 flex flex-col md:flex-row justify-between gap-4 shadow-sm hover:shadow-md transition-shadow">
-                  <div className="flex items-start gap-4">
-                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${sub.status === 'ready' ? 'bg-emerald-100' : 'bg-muted'}`}>
-                      {sub.status === 'ready' ? <CheckCircle className="w-6 h-6 text-emerald-600" /> : <Scissors className="w-6 h-6 text-muted-foreground" />}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-bold text-lg">{sub.profileName}</span>
-                        <span className="text-sm text-muted-foreground">({sub.subOrderNumber})</span>
-                      </div>
-                      <div className="text-sm text-muted-foreground flex items-center gap-3 flex-wrap">
-                        <span className="bg-muted px-2 py-1 rounded-md">{t('qty')} {sub.quantity}</span>
-                        <span className="bg-muted px-2 py-1 rounded-md">{sub.fabricSource === 'shop_fabric' ? t('shopFabric') : t('customerFabric')}</span>
-                        {sub.fabricDescription && <span>{sub.fabricDescription}</span>}
-                        {inv.bookNumber && (
-                          <span className="bg-sky-100 text-sky-700 px-2 py-1 rounded-md font-medium">
-                            {t('lightBookRef')} {inv.bookNumber}
-                            {inv.pageNumber ? ` / ${t('lightPageRef')} ${inv.pageNumber}` : ''}
-                          </span>
-                        )}
-                      </div>
-                    </div>
+          <div className="p-8 bg-background space-y-8">
+            {/* Qty Tracking Section */}
+            {(hasPartialQty || totalQty > 1) && (
+              <div className="bg-muted/40 rounded-2xl p-5 border border-border/50 space-y-4">
+                <div className="flex items-center gap-2">
+                  <Package className="w-5 h-5 text-primary" />
+                  <h3 className="font-bold text-base text-primary">{t('qtyBreakdownTitle')}</h3>
+                </div>
+
+                {/* Progress bar */}
+                <div className="space-y-1.5">
+                  <div className="w-full h-3 bg-muted rounded-full overflow-hidden flex">
+                    {deliveredQty > 0 && (
+                      <div className="h-full bg-blue-400 transition-all" style={{ width: `${(deliveredQty / totalQty) * 100}%` }} />
+                    )}
+                    {readyQty > 0 && (
+                      <div className="h-full bg-emerald-400 transition-all" style={{ width: `${(readyQty / totalQty) * 100}%` }} />
+                    )}
                   </div>
-                  <div className="flex flex-col justify-center text-left min-w-[100px] border-t md:border-t-0 pt-3 md:pt-0">
-                    <div className="text-xs text-muted-foreground">{t('orderValue')}</div>
-                    <div className="font-bold text-lg">{sub.price} {t('kwd')}</div>
+                  <div className="text-xs text-muted-foreground text-center">
+                    {deliveredQty} / {totalQty} {t('qtyProgressBar')}
                   </div>
                 </div>
-              ))}
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="bg-white rounded-xl p-3 text-center border border-border/50 shadow-sm">
+                    <div className="text-xs text-muted-foreground mb-1">{t('qtyTotal')}</div>
+                    <div className="text-2xl font-display font-bold text-primary">{totalQty}</div>
+                  </div>
+                  <div className={`rounded-xl p-3 text-center border shadow-sm ${inProgressQty > 0 ? 'bg-amber-50 border-amber-200' : 'bg-white border-border/50'}`}>
+                    <div className="text-xs text-muted-foreground mb-1">{t('qtyInProgress')}</div>
+                    <div className={`text-2xl font-display font-bold ${inProgressQty > 0 ? 'text-amber-700' : 'text-muted-foreground'}`}>{inProgressQty}</div>
+                  </div>
+                  <div className={`rounded-xl p-3 text-center border shadow-sm ${readyQty > 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-border/50'}`}>
+                    <div className="text-xs text-muted-foreground mb-1">{t('qtyReady')}</div>
+                    <div className={`text-2xl font-display font-bold ${readyQty > 0 ? 'text-emerald-700' : 'text-muted-foreground'}`}>{readyQty}</div>
+                  </div>
+                  <div className={`rounded-xl p-3 text-center border shadow-sm ${deliveredQty > 0 ? 'bg-blue-50 border-blue-200' : 'bg-white border-border/50'}`}>
+                    <div className="text-xs text-muted-foreground mb-1">{t('qtyDelivered')}</div>
+                    <div className={`text-2xl font-display font-bold ${deliveredQty > 0 ? 'text-blue-700' : 'text-muted-foreground'}`}>{deliveredQty}</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div>
+              <h3 className="font-display font-bold text-xl mb-4 text-primary">{t('orderDetails')} ({inv.subOrders.length})</h3>
+              <div className="space-y-4">
+                {inv.subOrders.map((sub: any) => (
+                  <div key={sub.id} className="bg-white border border-border/50 rounded-2xl p-5 flex flex-col md:flex-row justify-between gap-4 shadow-sm hover:shadow-md transition-shadow">
+                    <div className="flex items-start gap-4">
+                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${sub.status === 'ready' ? 'bg-emerald-100' : 'bg-muted'}`}>
+                        {sub.status === 'ready' ? <CheckCircle className="w-6 h-6 text-emerald-600" /> : <Scissors className="w-6 h-6 text-muted-foreground" />}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-bold text-lg">{sub.profileName}</span>
+                          <span className="text-sm text-muted-foreground">({sub.subOrderNumber})</span>
+                        </div>
+                        <div className="text-sm text-muted-foreground flex items-center gap-3 flex-wrap">
+                          <span className="bg-muted px-2 py-1 rounded-md">{t('qty')} {sub.quantity}</span>
+                          <span className="bg-muted px-2 py-1 rounded-md">{sub.fabricSource === 'shop_fabric' ? t('shopFabric') : t('customerFabric')}</span>
+                          {sub.fabricDescription && <span>{sub.fabricDescription}</span>}
+                          {inv.bookNumber && (
+                            <span className="bg-sky-100 text-sky-700 px-2 py-1 rounded-md font-medium">
+                              {t('lightBookRef')} {inv.bookNumber}
+                              {inv.pageNumber ? ` / ${t('lightPageRef')} ${inv.pageNumber}` : ''}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-col justify-center text-left min-w-[100px] border-t md:border-t-0 pt-3 md:pt-0">
+                      <div className="text-xs text-muted-foreground">{t('orderValue')}</div>
+                      <div className="font-bold text-lg">{sub.price} {t('kwd')}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
 
-            <div className="mt-8 bg-primary/5 rounded-3xl p-6 border border-primary/10 flex flex-col md:flex-row justify-between items-center gap-6">
+            <div className="bg-primary/5 rounded-3xl p-6 border border-primary/10 flex flex-col md:flex-row justify-between items-center gap-6">
               <div className="flex gap-8 w-full md:w-auto justify-around">
                 <div className="text-center">
                   <div className="text-muted-foreground text-sm mb-1">{t('colTotal')}</div>
@@ -309,21 +404,21 @@ export function InvoiceDetail() {
                     <Plus className="w-5 h-5" /> {t('addEditOrders')}
                   </Button>
                 )}
-                {inv.status === 'ready' && (
+                {/* Show deliver button when readyQty > 0 OR status === ready */}
+                {(readyQty > 0 || inv.status === 'ready') && inv.status !== 'delivered' && canEdit && (
                   <>
                     <Button
                       variant="outline"
                       className="rounded-xl h-14 flex-1 md:flex-none border-emerald-500 text-emerald-700 hover:bg-emerald-50"
                       onClick={handleWhatsapp}
                     >
-                      <MessageCircle className="w-5 h-5 ml-2" /> {t('whatsapp')}
+                      <MessageCircle className="w-5 h-5 ms-2" /> {t('whatsapp')}
                     </Button>
                     <Button
-                      className="rounded-xl h-14 flex-1 md:flex-none bg-primary text-white hover:bg-primary/90 shadow-lg"
-                      onClick={() => deliverMutation.mutate({ invoiceId })}
-                      disabled={deliverMutation.isPending}
+                      className="rounded-xl h-14 flex-1 md:flex-none bg-primary text-white hover:bg-primary/90 shadow-lg font-bold gap-2"
+                      onClick={openDeliverDialog}
                     >
-                      {deliverMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <><CheckCircle className="w-5 h-5 ml-2"/> {t('deliverToCustomer')}</>}
+                      <CheckCircle className="w-5 h-5" /> {t('deliverToCustomer')} {readyQty > 0 && `(${readyQty})`}
                     </Button>
                   </>
                 )}
@@ -338,9 +433,150 @@ export function InvoiceDetail() {
         </CardContent>
       </Card>
 
+      {/* Stage History Section */}
+      {Array.isArray(stageHistory) && stageHistory.length > 0 && (
+        <Card className="border-0 shadow-md rounded-2xl">
+          <CardContent className="p-6 space-y-4">
+            <div className="flex items-center gap-2">
+              <Scissors className="w-5 h-5 text-primary" />
+              <h3 className="font-display font-bold text-lg text-primary">{t('stageHistoryTitle')}</h3>
+              <Badge variant="outline" className="text-xs">{stageHistory.length}</Badge>
+            </div>
+            <div className="space-y-3">
+              {stageHistory.map((sh: any, i: number) => {
+                const stageMap: Record<string, string> = {
+                  cutting: t('stageCutting'), assembly: t('stageAssembly'),
+                  finishing: t('stageFinishing'), ironing: t('stageIroning'),
+                };
+                const stageBgMap: Record<string, string> = {
+                  cutting: 'bg-blue-100 text-blue-700 border-blue-200',
+                  assembly: 'bg-purple-100 text-purple-700 border-purple-200',
+                  finishing: 'bg-amber-100 text-amber-700 border-amber-200',
+                  ironing: 'bg-orange-100 text-orange-700 border-orange-200',
+                };
+                return (
+                  <div key={sh.id ?? i} className="flex items-start gap-3 bg-muted/30 rounded-xl p-3">
+                    <div className="shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">{i + 1}</div>
+                    <div className="flex-1 min-w-0 space-y-1.5">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${stageBgMap[sh.stage] ?? 'bg-muted text-muted-foreground border-border'}`}>
+                          {stageMap[sh.stage] ?? sh.stage}
+                        </span>
+                        <ArrowRight className="w-3.5 h-3.5 text-muted-foreground" />
+                        {sh.nextStage ? (
+                          <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${stageBgMap[sh.nextStage] ?? 'bg-muted text-muted-foreground border-border'}`}>
+                            {stageMap[sh.nextStage] ?? sh.nextStage}
+                          </span>
+                        ) : (
+                          <span className="text-xs font-bold px-2.5 py-1 rounded-full border bg-emerald-100 text-emerald-700 border-emerald-200">
+                            {t('stageReady')}
+                          </span>
+                        )}
+                        {sh.qty && sh.qty > 0 && (
+                          <span className="text-xs bg-primary/10 text-primary px-2.5 py-1 rounded-full font-bold">
+                            {sh.qty} {t('pieces')}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+                        {sh.tailorName && (
+                          <span className="flex items-center gap-1">
+                            <UserCircle2 className="w-3 h-3" /> {sh.tailorName}
+                          </span>
+                        )}
+                        {sh.completedAt && (
+                          <span className="flex items-center gap-1">
+                            <Calendar className="w-3 h-3" /> {format(new Date(sh.completedAt), 'yyyy/MM/dd HH:mm')}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Invoice History Section */}
       <InvoiceHistorySection history={history ?? []} t={t} dir={dir} />
 
+      {/* Partial Delivery Dialog */}
+      <Dialog open={showDeliverDialog} onOpenChange={open => { if (!open && !deliverMutation.isPending) { setShowDeliverDialog(false); setDeliverQtyInput(''); } }}>
+        <DialogContent dir={dir} className="max-w-sm rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-right">{t('partialDeliveryTitle')}</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-center">
+              <div className="text-sm text-muted-foreground mb-1">{t('readyForDeliveryQty')}</div>
+              <div className="text-3xl font-display font-bold text-emerald-700">{readyQty}</div>
+              <div className="text-xs text-muted-foreground mt-1">{t('pieces')}</div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-bold block text-center">{t('partialDeliveryDesc')}</label>
+              <div className="flex items-center gap-3">
+                <button
+                  className="w-12 h-12 rounded-xl bg-muted hover:bg-muted/70 flex items-center justify-center transition-colors"
+                  onClick={() => setDeliverQtyInput(String(Math.max(1, (parseInt(toEnglishDigits(deliverQtyInput)) || 1) - 1)))}
+                >
+                  <Minus className="w-5 h-5" />
+                </button>
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  value={deliverQtyInput}
+                  onChange={e => setDeliverQtyInput(toEnglishDigits(e.target.value).replace(/[^0-9]/g, ''))}
+                  className={`flex-1 h-14 text-center text-2xl font-bold rounded-xl ${!isDeliverQtyValid && deliverQtyInput !== '' ? 'border-red-400' : 'border-primary/30'}`}
+                />
+                <button
+                  className="w-12 h-12 rounded-xl bg-muted hover:bg-muted/70 flex items-center justify-center transition-colors"
+                  onClick={() => setDeliverQtyInput(String(Math.min(readyQty, (parseInt(toEnglishDigits(deliverQtyInput)) || 0) + 1)))}
+                >
+                  <Plus className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Quick select */}
+            <div className="flex gap-2 flex-wrap justify-center">
+              {[1, Math.ceil(readyQty / 2), readyQty].filter((v, i, a) => v > 0 && a.indexOf(v) === i).map(v => (
+                <button
+                  key={v}
+                  onClick={() => setDeliverQtyInput(String(v))}
+                  className={`px-4 py-2 rounded-xl text-sm font-bold transition-colors border ${
+                    deliverQtyInt === v ? 'bg-primary text-white border-primary' : 'bg-muted border-transparent hover:border-primary/30'
+                  }`}
+                >
+                  {v === readyQty ? `${t('allPieces')} (${v})` : v}
+                </button>
+              ))}
+            </div>
+
+            {isDeliverQtyValid && isPartialDeliver && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm text-center text-amber-800 font-medium">
+                {readyQty - deliverQtyInt} {t('pieces')} {t('qtyReady')}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="flex-row-reverse gap-2 sm:flex-row-reverse">
+            <Button
+              className={`flex-1 font-bold rounded-xl h-12 ${isPartialDeliver ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'bg-primary hover:bg-primary/90 text-white'}`}
+              disabled={deliverMutation.isPending || !isDeliverQtyValid}
+              onClick={() => deliverMutation.mutate({ qty: deliverQtyInt })}
+            >
+              {deliverMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : `${t('deliverPiecesBtn')} ${isDeliverQtyValid ? deliverQtyInt : ''} ${t('pieces')}`}
+            </Button>
+            <Button variant="outline" className="rounded-xl h-12" disabled={deliverMutation.isPending} onClick={() => { setShowDeliverDialog(false); setDeliverQtyInput(''); }}>
+              {t('tailorConfirmCancel')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

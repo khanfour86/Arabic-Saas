@@ -157,6 +157,11 @@ router.get("/shop/tailor-queue", requireAuth, requireShopRole("shop_manager", "t
       const price = subOrders.reduce((s, so) => s + parseFloat(so.price), 0);
       const paid = subOrders.reduce((s, so) => s + parseFloat(so.paidAmount), 0);
 
+      const lightReadyQty = invoice.readyQty ?? 0;
+      const lightDeliveredQty = invoice.deliveredQty ?? 0;
+      const lightInProgressQty = Math.max(0, qty - lightReadyQty - lightDeliveredQty);
+      const lightAvailable = Math.max(0, lightInProgressQty - (invoice.qtyProcessed ?? 0));
+
       items.push({
         invoiceId: invoice.id,
         invoiceNumber: invoice.invoiceNumber,
@@ -169,6 +174,12 @@ router.get("/shop/tailor-queue", requireAuth, requireShopRole("shop_manager", "t
         status: invoice.status,
         plan: 'light',
         quantity: qty,
+        totalQty: qty,
+        readyQty: lightReadyQty,
+        deliveredQty: lightDeliveredQty,
+        inProgressQty: lightInProgressQty,
+        qtyProcessed: invoice.qtyProcessed ?? 0,
+        availableAtStage: lightAvailable,
         price,
         paidAmount: paid,
         remainingAmount: price - paid,
@@ -220,6 +231,12 @@ router.get("/shop/tailor-queue", requireAuth, requireShopRole("shop_manager", "t
         });
       }
 
+      const premQty = soWithDetails.reduce((s, so) => s + so.quantity, 0);
+      const premReadyQty = invoice.readyQty ?? 0;
+      const premDeliveredQty = invoice.deliveredQty ?? 0;
+      const premInProgressQty = Math.max(0, premQty - premReadyQty - premDeliveredQty);
+      const premAvailable = Math.max(0, premInProgressQty - (invoice.qtyProcessed ?? 0));
+
       items.push({
         invoiceId: invoice.id,
         invoiceNumber: invoice.invoiceNumber,
@@ -231,6 +248,12 @@ router.get("/shop/tailor-queue", requireAuth, requireShopRole("shop_manager", "t
         currentStage: invoice.currentStage ?? null,
         status: invoice.status,
         plan: 'premium',
+        totalQty: premQty,
+        readyQty: premReadyQty,
+        deliveredQty: premDeliveredQty,
+        inProgressQty: premInProgressQty,
+        qtyProcessed: invoice.qtyProcessed ?? 0,
+        availableAtStage: premAvailable,
         subOrders: soWithDetails,
       });
     }
@@ -276,6 +299,7 @@ router.get("/shop/tailor-completed", requireAuth, requireShopRole("shop_manager"
       currentInvoiceStatus: invoice.status,
       currentStage: invoice.currentStage ?? null,
       quantity: qty,
+      qty: h.qty ?? qty,
       plan,
     });
   }

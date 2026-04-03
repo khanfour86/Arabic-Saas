@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
+import { toEnglishDigits } from '@/lib/digits';
 import { useTranslation } from '@/lib/i18n';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import {
   AlertDialog,
@@ -14,7 +14,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Loader2, CheckCircle, Scissors, Ruler, StickyNote, Search, X, Clock, AlertCircle } from 'lucide-react';
+import { Loader2, CheckCircle, Scissors, Ruler, StickyNote, Search, X, Clock, AlertCircle, Minus, Plus } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
@@ -76,7 +76,8 @@ export function TailorQueue() {
 
 function CurrentOrdersTab({ t }: { t: (k: any) => string }) {
   const [search, setSearch] = useState('');
-  const [confirmInvoiceId, setConfirmInvoiceId] = useState<number | null>(null);
+  const [confirmItem, setConfirmItem] = useState<{ invoiceId: number; available: number } | null>(null);
+  const [qtyInput, setQtyInput] = useState('');
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -86,8 +87,12 @@ function CurrentOrdersTab({ t }: { t: (k: any) => string }) {
   });
 
   const completeStageMutation = useMutation({
-    mutationFn: (invoiceId: number) =>
-      fetch(`/api/shop/invoices/${invoiceId}/complete-stage`, { method: 'POST' }).then(async r => {
+    mutationFn: ({ invoiceId, qty }: { invoiceId: number; qty: number }) =>
+      fetch(`/api/shop/invoices/${invoiceId}/complete-stage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ qty }),
+      }).then(async r => {
         if (!r.ok) {
           const err = await r.json();
           throw new Error(err.error || 'خطأ');
@@ -95,21 +100,40 @@ function CurrentOrdersTab({ t }: { t: (k: any) => string }) {
         return r.json();
       }),
     onSuccess: (result) => {
-      setConfirmInvoiceId(null);
+      setConfirmItem(null);
+      setQtyInput('');
       queryClient.invalidateQueries({ queryKey: ['/api/shop/tailor-queue'] });
       queryClient.invalidateQueries({ queryKey: ['/api/shop/tailor-completed'] });
       queryClient.invalidateQueries({ queryKey: ['/api/shop/workflow'] });
       if (result.isReady) {
-        toast({ title: t('tailorLastStageSuccess') });
+        toast({ title: `${t('tailorLastStageSuccess')} (${result.completedQty} ${t('pieces')})` });
+      } else if (result.isPartial) {
+        toast({ title: `${t('tailorPartialSuccess')} ${result.completedQty} ${t('pieces')}` });
       } else {
-        toast({ title: t('tailorCompletedSuccess') });
+        toast({ title: `${t('tailorCompletedSuccess')} (${result.completedQty} ${t('pieces')})` });
       }
     },
     onError: (err: any) => {
-      setConfirmInvoiceId(null);
+      setConfirmItem(null);
+      setQtyInput('');
       toast({ title: err.message || 'خطأ', variant: 'destructive' });
     },
   });
+
+  const handleOpenConfirm = (invoiceId: number, available: number) => {
+    setConfirmItem({ invoiceId, available });
+    setQtyInput(String(available));
+  };
+
+  const handleConfirm = () => {
+    if (!confirmItem) return;
+    const qty = parseInt(toEnglishDigits(qtyInput), 10);
+    if (!qty || qty <= 0 || qty > confirmItem.available) {
+      toast({ title: t('invalidQty'), variant: 'destructive' });
+      return;
+    }
+    completeStageMutation.mutate({ invoiceId: confirmItem.invoiceId, qty });
+  };
 
   if (isLoading) return (
     <div className="flex justify-center p-12">
@@ -121,7 +145,6 @@ function CurrentOrdersTab({ t }: { t: (k: any) => string }) {
   const plan: string = data?.plan ?? 'premium';
   const allItems: any[] = data?.items ?? [];
 
-  // If tailor has no roles assigned
   if (myRoles.length === 0) {
     return (
       <Card className="border-0 shadow-md rounded-2xl">
@@ -137,6 +160,11 @@ function CurrentOrdersTab({ t }: { t: (k: any) => string }) {
   const filtered = q
     ? allItems.filter((item: any) => item.invoiceNumber.toLowerCase().includes(q))
     : allItems;
+
+  const confirmQty = parseInt(toEnglishDigits(qtyInput), 10) || 0;
+  const confirmAvailable = confirmItem?.available ?? 1;
+  const isQtyValid = confirmQty > 0 && confirmQty <= confirmAvailable;
+  const isPartialCompletion = confirmQty < confirmAvailable;
 
   return (
     <div className="space-y-4">
@@ -170,44 +198,114 @@ function CurrentOrdersTab({ t }: { t: (k: any) => string }) {
               key={item.invoiceId}
               item={item}
               plan={plan}
-              onComplete={() => setConfirmInvoiceId(item.invoiceId)}
-              isCompleting={completeStageMutation.isPending && completeStageMutation.variables === item.invoiceId}
+              onComplete={() => handleOpenConfirm(item.invoiceId, item.availableAtStage ?? item.totalQty ?? item.quantity ?? 1)}
+              isCompleting={completeStageMutation.isPending && completeStageMutation.variables?.invoiceId === item.invoiceId}
               t={t}
             />
           ))}
         </div>
       )}
 
-      {/* Confirmation dialog before completing a stage */}
+      {/* Partial Completion Dialog */}
       <AlertDialog
-        open={confirmInvoiceId !== null}
-        onOpenChange={(open) => { if (!open && !completeStageMutation.isPending) setConfirmInvoiceId(null); }}
+        open={confirmItem !== null}
+        onOpenChange={(open) => { if (!open && !completeStageMutation.isPending) { setConfirmItem(null); setQtyInput(''); } }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-right">{t('tailorConfirmTitle')}</AlertDialogTitle>
+            <AlertDialogTitle className="text-right">{t('partialCompleteTitle')}</AlertDialogTitle>
             <AlertDialogDescription className="text-right sr-only">
-              {t('tailorConfirmTitle')}
+              {t('partialCompleteTitle')}
             </AlertDialogDescription>
           </AlertDialogHeader>
+
+          <div className="space-y-4 py-2">
+            {/* Available info */}
+            <div className="bg-muted/50 rounded-2xl p-4 text-center">
+              <div className="text-sm text-muted-foreground mb-1">{t('availablePieces')}</div>
+              <div className="text-3xl font-display font-bold text-primary">{confirmAvailable}</div>
+              <div className="text-xs text-muted-foreground mt-1">{t('pieces')}</div>
+            </div>
+
+            {/* Qty input */}
+            <div className="space-y-2">
+              <label className="text-sm font-bold block text-center">{t('completePieces')}</label>
+              <div className="flex items-center gap-3">
+                <button
+                  className="w-12 h-12 rounded-xl bg-muted hover:bg-muted/70 flex items-center justify-center transition-colors"
+                  onClick={() => {
+                    const v = Math.max(1, (parseInt(toEnglishDigits(qtyInput)) || 1) - 1);
+                    setQtyInput(String(v));
+                  }}
+                >
+                  <Minus className="w-5 h-5" />
+                </button>
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  value={qtyInput}
+                  onChange={e => {
+                    const raw = toEnglishDigits(e.target.value).replace(/[^0-9]/g, '');
+                    setQtyInput(raw);
+                  }}
+                  className={`flex-1 h-14 text-center text-2xl font-bold rounded-xl ${!isQtyValid ? 'border-red-400 focus-visible:ring-red-400' : 'border-primary/30 focus-visible:ring-primary'}`}
+                />
+                <button
+                  className="w-12 h-12 rounded-xl bg-muted hover:bg-muted/70 flex items-center justify-center transition-colors"
+                  onClick={() => {
+                    const v = Math.min(confirmAvailable, (parseInt(toEnglishDigits(qtyInput)) || 0) + 1);
+                    setQtyInput(String(v));
+                  }}
+                >
+                  <Plus className="w-5 h-5" />
+                </button>
+              </div>
+              {!isQtyValid && qtyInput !== '' && (
+                <p className="text-xs text-red-600 text-center font-bold">{t('invalidQty')} (1 - {confirmAvailable})</p>
+              )}
+            </div>
+
+            {/* Quick select buttons */}
+            <div className="flex gap-2 flex-wrap justify-center">
+              {[1, Math.ceil(confirmAvailable / 2), confirmAvailable].filter((v, i, a) => v > 0 && a.indexOf(v) === i).map(v => (
+                <button
+                  key={v}
+                  onClick={() => setQtyInput(String(v))}
+                  className={`px-4 py-2 rounded-xl text-sm font-bold transition-colors border ${
+                    confirmQty === v ? 'bg-primary text-white border-primary' : 'bg-muted border-transparent hover:border-primary/30'
+                  }`}
+                >
+                  {v === confirmAvailable ? `${t('allPieces')} (${v})` : v}
+                </button>
+              ))}
+            </div>
+
+            {/* Preview info */}
+            {isQtyValid && isPartialCompletion && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm text-center text-amber-800 font-medium">
+                {t('partialRemainsInfo', { remaining: confirmAvailable - confirmQty })}
+              </div>
+            )}
+            {isQtyValid && !isPartialCompletion && (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-sm text-center text-emerald-800 font-medium">
+                {t('completeAllPiecesInfo')}
+              </div>
+            )}
+          </div>
+
           <AlertDialogFooter className="flex-row-reverse gap-2 sm:flex-row-reverse">
             <AlertDialogAction
-              className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold"
-              disabled={completeStageMutation.isPending}
-              onClick={(e) => {
-                e.preventDefault();
-                if (confirmInvoiceId !== null) {
-                  completeStageMutation.mutate(confirmInvoiceId);
-                }
-              }}
+              className={`font-bold ${isPartialCompletion ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'bg-emerald-500 hover:bg-emerald-600 text-white'}`}
+              disabled={completeStageMutation.isPending || !isQtyValid}
+              onClick={(e) => { e.preventDefault(); handleConfirm(); }}
             >
               {completeStageMutation.isPending
                 ? <Loader2 className="w-4 h-4 animate-spin" />
-                : t('tailorConfirmYes')}
+                : isPartialCompletion ? t('tailorConfirmPartial') : t('tailorConfirmYes')}
             </AlertDialogAction>
             <AlertDialogCancel
               disabled={completeStageMutation.isPending}
-              onClick={() => setConfirmInvoiceId(null)}
+              onClick={() => { setConfirmItem(null); setQtyInput(''); }}
             >
               {t('tailorConfirmCancel')}
             </AlertDialogCancel>
@@ -226,6 +324,11 @@ function CurrentInvoiceCard({ item, plan, onComplete, isCompleting, t }: {
   t: (k: any) => string;
 }) {
   const [showMeasurements, setShowMeasurements] = useState(false);
+  const totalQty: number = item.totalQty ?? item.quantity ?? 1;
+  const readyQty: number = item.readyQty ?? 0;
+  const deliveredQty: number = item.deliveredQty ?? 0;
+  const inProgressQty: number = item.inProgressQty ?? (totalQty - readyQty - deliveredQty);
+  const availableAtStage: number = item.availableAtStage ?? inProgressQty;
 
   return (
     <Card className={`shadow-lg rounded-2xl overflow-hidden hover:shadow-xl transition-all ${
@@ -254,11 +357,14 @@ function CurrentInvoiceCard({ item, plan, onComplete, isCompleting, t }: {
           <Button
             className="h-12 px-6 rounded-xl font-bold bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 hover:-translate-y-0.5 transition-all shrink-0"
             onClick={onComplete}
-            disabled={isCompleting}
+            disabled={isCompleting || availableAtStage <= 0}
           >
             {isCompleting ? <Loader2 className="w-5 h-5 animate-spin" /> : t('tailorCompleteBtn')}
           </Button>
         </div>
+
+        {/* Qty summary bar */}
+        <QtySummaryBar totalQty={totalQty} inProgressQty={inProgressQty} readyQty={readyQty} deliveredQty={deliveredQty} availableAtStage={availableAtStage} t={t} />
 
         {/* Plan-aware details */}
         {plan === 'light' ? (
@@ -271,9 +377,57 @@ function CurrentInvoiceCard({ item, plan, onComplete, isCompleting, t }: {
   );
 }
 
+function QtySummaryBar({ totalQty, inProgressQty, readyQty, deliveredQty, availableAtStage, t }: {
+  totalQty: number;
+  inProgressQty: number;
+  readyQty: number;
+  deliveredQty: number;
+  availableAtStage: number;
+  t: (k: any) => string;
+}) {
+  const hasPartial = readyQty > 0 || deliveredQty > 0;
+
+  return (
+    <div className="space-y-2">
+      {/* Progress bar */}
+      <div className="w-full h-2 bg-muted rounded-full overflow-hidden flex">
+        {deliveredQty > 0 && (
+          <div className="h-full bg-blue-400 transition-all" style={{ width: `${(deliveredQty / totalQty) * 100}%` }} />
+        )}
+        {readyQty > 0 && (
+          <div className="h-full bg-emerald-400 transition-all" style={{ width: `${(readyQty / totalQty) * 100}%` }} />
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div className="bg-muted/60 rounded-xl p-2.5 text-center">
+          <div className="text-xs text-muted-foreground">{t('qtyTotal')}</div>
+          <div className="font-bold text-sm text-foreground">{totalQty}</div>
+        </div>
+        <div className={`rounded-xl p-2.5 text-center ${availableAtStage > 0 ? 'bg-amber-50 border border-amber-200' : 'bg-muted/40'}`}>
+          <div className="text-xs text-muted-foreground">{t('availablePieces')}</div>
+          <div className={`font-bold text-sm ${availableAtStage > 0 ? 'text-amber-700' : 'text-muted-foreground'}`}>{availableAtStage}</div>
+        </div>
+        {readyQty > 0 && (
+          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 text-center">
+            <div className="text-xs text-emerald-600">{t('qtyReady')}</div>
+            <div className="font-bold text-sm text-emerald-700">{readyQty}</div>
+          </div>
+        )}
+        {deliveredQty > 0 && (
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-2.5 text-center">
+            <div className="text-xs text-blue-600">{t('qtyDelivered')}</div>
+            <div className="font-bold text-sm text-blue-700">{deliveredQty}</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function LightInvoiceDetails({ item, t }: { item: any; t: (k: any) => string }) {
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
       {item.bookNumber && (
         <div className="bg-muted/50 rounded-xl p-3 text-center">
           <div className="text-xs text-muted-foreground mb-1">{t('bookNumberLabel')}</div>
@@ -286,10 +440,6 @@ function LightInvoiceDetails({ item, t }: { item: any; t: (k: any) => string }) 
           <div className="font-bold">{item.pageNumber}</div>
         </div>
       )}
-      <div className="bg-primary/10 rounded-xl p-3 text-center">
-        <div className="text-xs text-muted-foreground mb-1">{t('qtyLabel')}</div>
-        <div className="font-bold text-primary">{item.quantity}</div>
-      </div>
       <div className="bg-muted/50 rounded-xl p-3 text-center">
         <div className="text-xs text-muted-foreground mb-1">{t('colTotal')}</div>
         <div className="font-bold">{Number(item.price ?? 0).toFixed(3)}</div>
@@ -456,6 +606,11 @@ function CompletedOrdersTab({ t }: { t: (k: any) => string }) {
                     {item.bookNumber && (
                       <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
                         {t('lightBookRef')} {item.bookNumber}
+                      </span>
+                    )}
+                    {item.qty && item.qty > 1 && (
+                      <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-bold">
+                        {item.qty} {t('pieces')}
                       </span>
                     )}
                   </div>

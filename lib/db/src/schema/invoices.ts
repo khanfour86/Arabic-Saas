@@ -15,6 +15,9 @@ export const invoicesTable = pgTable("invoices", {
   allSubOrdersReady: boolean("all_sub_orders_ready").notNull().default(false),
   bookNumber: text("book_number"),
   pageNumber: text("page_number"),
+  qtyProcessed: integer("qty_processed").notNull().default(0),
+  readyQty: integer("ready_qty").notNull().default(0),
+  deliveredQty: integer("delivered_qty").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   deliveredAt: timestamp("delivered_at", { withTimezone: true }),
 }, (t) => [

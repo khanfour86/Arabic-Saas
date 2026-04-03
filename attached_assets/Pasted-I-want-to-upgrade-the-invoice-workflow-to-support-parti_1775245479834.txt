@@ -1,0 +1,239 @@
+I want to upgrade the invoice workflow to support partial completion and partial delivery by quantity.
+
+IMPORTANT:
+This feature must be fully implemented for BOTH versions of the system:
+- Light version
+- Premium version
+
+The same quantity workflow logic must apply to both versions.
+Only the invoice field display may differ depending on version, but the workflow behavior must be identical.
+
+Business case:
+A single invoice may contain multiple dishdashas.
+Example:
+quantity = 7
+
+Sometimes only 2 pieces are completed and delivered, while the remaining 5 are still under tailoring.
+
+I want the system to support quantity-based workflow stages.
+
+==================================================
+1) CORE QUANTITY WORKFLOW
+==================================================
+
+Each invoice must track:
+
+- total quantity
+- quantity currently in progress
+- quantity ready for pickup
+- quantity already delivered
+- quantity still remaining under tailoring
+
+Suggested fields:
+
+- totalQty
+- inProgressQty
+- readyQty
+- deliveredQty
+- remainingQty
+
+remainingQty can be calculated or stored, as long as it is always accurate.
+
+Formula:
+remainingQty = totalQty - deliveredQty - readyQty (or based on stage quantities)
+
+==================================================
+2) PARTIAL COMPLETION BY STAGE
+==================================================
+
+At every workflow stage:
+- cutting
+- stitching / tailoring
+- ironing / finishing
+- ready for reception
+
+the staff user must be able to complete only part of the quantity.
+
+Example:
+Invoice total = 7
+
+Cutting finishes 2 pieces
+
+After clicking complete:
+- 2 pieces move to next stage
+- 5 remain in current stage
+
+The invoice must remain active.
+
+==================================================
+3) COMPLETE QUANTITY ACTION
+==================================================
+
+At each workflow stage, add a new action:
+
+"Complete Quantity"
+
+The staff should choose how many pieces are completed.
+
+Example UI:
+
+Available pieces at current stage = 7
+
+Complete quantity:
+[ 2 ]
+
+After confirmation:
+- move 2 to next stage
+- leave 5 in current stage
+
+Validation:
+- cannot complete more than available
+- cannot input zero or negative values
+- cannot exceed invoice total
+
+==================================================
+4) RECEPTION / READY FOR PICKUP
+==================================================
+
+At reception, show:
+
+- ready for pickup quantity
+- still under tailoring quantity
+- delivered quantity
+- total quantity
+
+Example:
+
+Invoice #1051
+Total: 7
+Ready: 2
+Under tailoring: 5
+Delivered: 0
+
+==================================================
+5) PARTIAL DELIVERY
+==================================================
+
+Reception must be able to partially deliver.
+
+Example:
+2 pieces are ready
+customer picks up 2
+
+After delivery:
+- delivered = 2
+- under tailoring = 5
+- invoice remains open
+
+The invoice should NOT close yet.
+
+==================================================
+6) AUTO CLOSE INVOICE
+==================================================
+
+Invoice should only close automatically when:
+
+deliveredQty == totalQty
+
+Example:
+7 delivered out of 7
+
+Then invoice status becomes:
+- completed
+- delivered
+- closed
+
+==================================================
+7) MOVEMENT HISTORY LOG
+==================================================
+
+Add quantity movement history.
+
+Every movement must be logged with:
+
+- date / time
+- from stage
+- to stage
+- quantity
+- user who performed action if available
+
+Example:
+
+03 Apr
+cutting -> stitching (2)
+
+04 Apr
+stitching -> ready (2)
+
+04 Apr
+ready -> delivered (2)
+
+This history should remain visible in the invoice details.
+
+==================================================
+8) UI DISPLAY
+==================================================
+
+Show quantity summary clearly inside invoice details.
+
+Example:
+
+Total quantity: 7
+Delivered: 2
+Ready: 0
+Under tailoring: 5
+
+A progress bar is preferred if possible.
+
+Example:
+2 / 7 delivered
+
+==================================================
+9) VERSION REQUIREMENT (VERY IMPORTANT)
+==================================================
+
+This must be applied to BOTH versions:
+
+- Light version
+- Premium version
+
+Same quantity workflow logic must work in both.
+
+Requirements:
+- Light invoices must support partial quantity workflow
+- Premium invoices must support partial quantity workflow
+- Do not break version-specific invoice fields
+- Keep create and edit flows working for both versions
+
+The workflow logic must be shared across both versions.
+
+==================================================
+10) TECHNICAL IMPLEMENTATION
+==================================================
+
+Please update all affected parts:
+
+- database schema
+- invoice routes / API
+- stage workflow logic
+- receptionist UI
+- tailor queue UI
+- invoice details page
+- invoice edit page
+- both Light and Premium invoice flows
+- validation
+- history log
+
+==================================================
+11) IMPORTANT RULES
+==================================================
+
+- do not break existing invoices
+- existing invoices should default correctly
+- migration must preserve current quantity values
+- must support both versions
+- must support partial delivery
+- must support partial stage completion
+- invoice closes only after full delivery
+
+Please implement this end-to-end and tell me exactly which files were updated.

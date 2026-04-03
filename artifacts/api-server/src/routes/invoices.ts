@@ -59,6 +59,10 @@ async function buildInvoiceResponse(shopId: number, invoice: any) {
   const subOrders = await getSubOrdersForInvoice(shopId, invoice.id);
   const totalAmount = subOrders.reduce((s, so) => s + so.price, 0);
   const paidAmount = subOrders.reduce((s, so) => s + so.paidAmount, 0);
+  const totalQty = subOrders.reduce((s, so) => s + so.quantity, 0);
+  const readyQty: number = invoice.readyQty ?? 0;
+  const deliveredQty: number = invoice.deliveredQty ?? 0;
+  const inProgressQty = Math.max(0, totalQty - readyQty - deliveredQty);
 
   return {
     id: invoice.id,
@@ -77,6 +81,11 @@ async function buildInvoiceResponse(shopId: number, invoice: any) {
     bookNumber: invoice.bookNumber ?? null,
     pageNumber: invoice.pageNumber ?? null,
     allSubOrdersReady: invoice.allSubOrdersReady,
+    totalQty,
+    readyQty,
+    deliveredQty,
+    inProgressQty,
+    qtyProcessed: invoice.qtyProcessed ?? 0,
     createdAt: invoice.createdAt,
     deliveredAt: invoice.deliveredAt,
     subOrders,
@@ -116,7 +125,7 @@ router.get("/shop/invoices", isShopUser, async (req, res): Promise<void> => {
     allInvoices = allInvoices.filter(i => i.status === cleanStatus);
   }
   if (readyForDelivery === "true") {
-    allInvoices = allInvoices.filter(i => i.allSubOrdersReady && i.status !== "delivered");
+    allInvoices = allInvoices.filter(i => i.readyQty > 0 && i.status !== "delivered");
   }
 
   const invoices = [];
@@ -134,6 +143,10 @@ router.get("/shop/invoices", isShopUser, async (req, res): Promise<void> => {
     const subOrders = await getSubOrdersForInvoice(user.shopId!, inv.id);
     const totalAmount = subOrders.reduce((s, so) => s + so.price, 0);
     const paidAmount = subOrders.reduce((s, so) => s + so.paidAmount, 0);
+    const totalQty = subOrders.reduce((s, so) => s + so.quantity, 0);
+    const readyQty = inv.readyQty ?? 0;
+    const deliveredQty = inv.deliveredQty ?? 0;
+    const inProgressQty = Math.max(0, totalQty - readyQty - deliveredQty);
 
     invoices.push({
       id: inv.id,
@@ -152,6 +165,10 @@ router.get("/shop/invoices", isShopUser, async (req, res): Promise<void> => {
       bookNumber: inv.bookNumber ?? null,
       pageNumber: inv.pageNumber ?? null,
       allSubOrdersReady: inv.allSubOrdersReady,
+      totalQty,
+      readyQty,
+      deliveredQty,
+      inProgressQty,
       createdAt: inv.createdAt,
       deliveredAt: inv.deliveredAt,
     });
@@ -207,10 +224,8 @@ router.post("/shop/invoices", isManagerOrReception, requireActiveShop, async (re
       return;
     }
 
-    // Invoice number generated OUTSIDE the transaction (read-only MAX query)
     const invoiceNumber = await generateInvoiceNumber(user.shopId!);
 
-    // Atomic: invoice + suborder saved together or rolled back together
     let invoice: any;
     const MAX_RETRIES = 3;
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
@@ -229,6 +244,9 @@ router.post("/shop/invoices", isManagerOrReception, requireActiveShop, async (re
             bookNumber: bookNumber ? bookNumber.toString() : null,
             pageNumber: pageNumber ? pageNumber.toString() : null,
             allSubOrdersReady: false,
+            qtyProcessed: 0,
+            readyQty: 0,
+            deliveredQty: 0,
           }).returning();
 
           await tx.insert(subOrdersTable).values({
@@ -275,7 +293,6 @@ router.post("/shop/invoices", isManagerOrReception, requireActiveShop, async (re
     return;
   }
 
-  // Validate all profileIds before any DB write
   for (let i = 0; i < subOrders.length; i++) {
     const so = subOrders[i];
     try {
@@ -286,10 +303,8 @@ router.post("/shop/invoices", isManagerOrReception, requireActiveShop, async (re
     }
   }
 
-  // Invoice number generated OUTSIDE the transaction (read-only MAX query)
   const invoiceNumber = await generateInvoiceNumber(user.shopId!);
 
-  // Atomic: invoice + all suborders saved together or rolled back together
   let invoice: any;
   const MAX_RETRIES = 3;
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
@@ -306,6 +321,9 @@ router.post("/shop/invoices", isManagerOrReception, requireActiveShop, async (re
           currentStage: startingStage,
           notes: notes ?? null,
           allSubOrdersReady: false,
+          qtyProcessed: 0,
+          readyQty: 0,
+          deliveredQty: 0,
         }).returning();
 
         for (let i = 0; i < subOrders.length; i++) {
@@ -358,7 +376,7 @@ router.get("/shop/invoices/:invoiceId", isShopUser, async (req, res): Promise<vo
   res.json(result);
 });
 
-// Complete Stage endpoint (Tailor presses "انتهاء")
+// ─── Complete Stage (with partial qty support) ─────────────────────────────
 router.post("/shop/invoices/:invoiceId/complete-stage", requireAuth, requireShopRole("tailor", "shop_manager"), requireActiveShop, async (req, res): Promise<void> => {
   const user = (req as any).user as AuthUser;
   const id = parseInt(Array.isArray(req.params.invoiceId) ? req.params.invoiceId[0] : req.params.invoiceId, 10);
@@ -372,84 +390,137 @@ router.post("/shop/invoices/:invoiceId/complete-stage", requireAuth, requireShop
   }
 
   if (!invoice.currentStage) {
-    res.status(400).json({ error: "هذه الفاتورة لا توجد لها مرحلة نشطة حالياً" });
+    res.status(400).json({ error: "لا توجد مرحلة نشطة لهذه الفاتورة حالياً" });
     return;
   }
 
-  // Verify tailor has this stage in their roles (skip check for manager)
   if (user.role === 'tailor') {
     const [tailorUser] = await db.select({ tailorRoles: usersTable.tailorRoles })
       .from(usersTable).where(eq(usersTable.id, user.id));
-
     if (!tailorUser?.tailorRoles?.includes(invoice.currentStage)) {
       res.status(403).json({ error: "ليس لديك صلاحية إنهاء هذه المرحلة" });
       return;
     }
   }
 
+  // Compute quantity availability
+  const subOrders = await db.select({ quantity: subOrdersTable.quantity })
+    .from(subOrdersTable)
+    .where(and(eq(subOrdersTable.shopId, user.shopId!), eq(subOrdersTable.invoiceId, id)));
+  const totalQty = subOrders.reduce((s, so) => s + so.quantity, 0);
+  const inProgressQty = Math.max(0, totalQty - (invoice.readyQty ?? 0) - (invoice.deliveredQty ?? 0));
+  const alreadyProcessed = invoice.qtyProcessed ?? 0;
+  const availableAtStage = Math.max(0, inProgressQty - alreadyProcessed);
+
+  if (availableAtStage <= 0) {
+    res.status(400).json({ error: "لا توجد قطع متاحة لإنهاء هذه المرحلة" });
+    return;
+  }
+
+  // Parse requested qty — default = complete all available (backward compat)
+  const rawQty = req.body.qty != null ? parseInt(req.body.qty, 10) : availableAtStage;
+  if (!rawQty || rawQty <= 0 || rawQty > availableAtStage) {
+    res.status(400).json({ error: `الكمية غير صالحة. المتاح: ${availableAtStage}` });
+    return;
+  }
+  const completedQty = rawQty;
+
   const activeStages = await getActiveStages(user.shopId!);
-  // Capture the stage we expect to complete BEFORE entering the transaction
   const expectedStage = invoice.currentStage!;
   const nextStage = getNextStage(expectedStage, activeStages);
+  const isLastStage = !nextStage;
 
-  // All DB writes are atomic + protected against concurrent double-submission:
-  //   - Row lock (FOR UPDATE) re-fetches the invoice inside the transaction
-  //   - If currentStage changed since our pre-check → abort with clear error
-  //   - This prevents the same stage being recorded twice under any concurrency
-  let transactionResult: { updated: any; isReady: boolean };
+  let transactionResult: { updated: any; isReady: boolean; isPartial: boolean };
   try {
     transactionResult = await db.transaction(async (tx) => {
-      // Lock the invoice row to block concurrent complete-stage calls
       const [locked] = await tx.select()
         .from(invoicesTable)
         .where(and(eq(invoicesTable.shopId, user.shopId!), eq(invoicesTable.id, id)))
         .for('update');
 
-      // If another request already advanced the stage, abort
       if (!locked || locked.currentStage !== expectedStage) {
         const err: any = new Error("تم إنهاء هذه المرحلة مسبقاً");
         err.code = 'STAGE_ALREADY_COMPLETED';
         throw err;
       }
 
+      // Re-compute inside transaction with locked data
+      const lockedAvailable = Math.max(0, inProgressQty - (locked.qtyProcessed ?? 0));
+      if (completedQty > lockedAvailable) {
+        const err: any = new Error(`الكمية المطلوبة (${completedQty}) تتجاوز المتاح (${lockedAvailable})`);
+        err.code = 'QTY_EXCEEDED';
+        throw err;
+      }
+
       await tx.insert(stageHistoryTable).values({
-        invoiceId: invoice.id,
+        invoiceId: id,
         shopId: user.shopId!,
         stage: expectedStage,
         completedBy: user.id,
-        nextStage: nextStage ?? null,
+        nextStage: isLastStage ? null : nextStage,
+        qty: completedQty,
       });
 
-      if (nextStage) {
-        const [upd] = await tx.update(invoicesTable)
-          .set({ currentStage: nextStage })
-          .where(eq(invoicesTable.id, id))
-          .returning();
-        return { updated: upd, isReady: false };
+      const newQtyProcessed = (locked.qtyProcessed ?? 0) + completedQty;
+      const newReadyQty = isLastStage ? (locked.readyQty ?? 0) + completedQty : (locked.readyQty ?? 0);
+      const allPiecesCompletedStage = newQtyProcessed >= inProgressQty;
+
+      const updateObj: any = {
+        qtyProcessed: newQtyProcessed,
+        readyQty: newReadyQty,
+      };
+
+      if (allPiecesCompletedStage) {
+        if (nextStage) {
+          updateObj.currentStage = nextStage;
+          updateObj.qtyProcessed = 0;
+        } else {
+          updateObj.currentStage = null;
+          updateObj.qtyProcessed = 0;
+        }
       }
 
-      // Last stage — mark invoice ready + all suborders ready atomically
+      // Check if ALL pieces are now accounted for (ready + delivered = total)
+      const newInProgressQty = Math.max(0, totalQty - newReadyQty - (locked.deliveredQty ?? 0));
+      let isReady = false;
+      if (newInProgressQty === 0 && newReadyQty > 0) {
+        updateObj.status = 'ready';
+        updateObj.allSubOrdersReady = true;
+        isReady = true;
+        // Mark sub-orders ready
+        await tx.update(subOrdersTable)
+          .set({ status: 'ready' })
+          .where(and(eq(subOrdersTable.shopId, user.shopId!), eq(subOrdersTable.invoiceId, id)));
+      }
+
       const [upd] = await tx.update(invoicesTable)
-        .set({ currentStage: null, status: 'ready', allSubOrdersReady: true })
+        .set(updateObj)
         .where(eq(invoicesTable.id, id))
         .returning();
 
-      await tx.update(subOrdersTable)
-        .set({ status: 'ready' })
-        .where(and(eq(subOrdersTable.shopId, user.shopId!), eq(subOrdersTable.invoiceId, id)));
-
-      return { updated: upd, isReady: true };
+      return { updated: upd, isReady, isPartial: !allPiecesCompletedStage };
     });
   } catch (err: any) {
     if (err.code === 'STAGE_ALREADY_COMPLETED') {
       res.status(409).json({ error: err.message });
       return;
     }
+    if (err.code === 'QTY_EXCEEDED') {
+      res.status(400).json({ error: err.message });
+      return;
+    }
     throw err;
   }
 
   const result = await buildInvoiceResponse(user.shopId!, transactionResult.updated);
-  res.json({ ...result, moved: !transactionResult.isReady, nextStage: nextStage ?? null, isReady: transactionResult.isReady });
+  res.json({
+    ...result,
+    completedQty,
+    moved: !transactionResult.isReady && !transactionResult.isPartial,
+    isPartial: transactionResult.isPartial,
+    nextStage: !transactionResult.isPartial ? (nextStage ?? null) : null,
+    isReady: transactionResult.isReady,
+  });
 });
 
 router.patch("/shop/invoices/:invoiceId", isManagerOrReception, requireActiveShop, async (req, res): Promise<void> => {
@@ -475,6 +546,7 @@ router.patch("/shop/invoices/:invoiceId", isManagerOrReception, requireActiveSho
   res.json(result);
 });
 
+// ─── Deliver (partial delivery support) ────────────────────────────────────
 router.post("/shop/invoices/:invoiceId/deliver", isManagerOrReception, requireActiveShop, async (req, res): Promise<void> => {
   const user = (req as any).user as AuthUser;
   const id = parseInt(Array.isArray(req.params.invoiceId) ? req.params.invoiceId[0] : req.params.invoiceId, 10);
@@ -487,18 +559,46 @@ router.post("/shop/invoices/:invoiceId/deliver", isManagerOrReception, requireAc
     return;
   }
 
-  if (!invoice.allSubOrdersReady) {
-    res.status(400).json({ error: "لم تكتمل جميع الطلبات بعد" });
+  const readyQty = invoice.readyQty ?? 0;
+  if (readyQty <= 0) {
+    res.status(400).json({ error: "لا توجد قطع جاهزة للتسليم" });
     return;
   }
 
+  const subOrders = await db.select({ quantity: subOrdersTable.quantity })
+    .from(subOrdersTable)
+    .where(and(eq(subOrdersTable.shopId, user.shopId!), eq(subOrdersTable.invoiceId, id)));
+  const totalQty = subOrders.reduce((s, so) => s + so.quantity, 0);
+
+  const rawQty = req.body.qty != null ? parseInt(req.body.qty, 10) : readyQty;
+  if (!rawQty || rawQty <= 0 || rawQty > readyQty) {
+    res.status(400).json({ error: `الكمية غير صالحة. الجاهز للتسليم: ${readyQty}` });
+    return;
+  }
+  const deliverQty = rawQty;
+
+  const newDeliveredQty = (invoice.deliveredQty ?? 0) + deliverQty;
+  const newReadyQty = readyQty - deliverQty;
+  const isFullyDelivered = newDeliveredQty >= totalQty;
+
+  const updateData: any = {
+    deliveredQty: newDeliveredQty,
+    readyQty: newReadyQty,
+  };
+
+  if (isFullyDelivered) {
+    updateData.status = 'delivered';
+    updateData.deliveredAt = new Date();
+    updateData.allSubOrdersReady = false;
+  }
+
   const [updated] = await db.update(invoicesTable)
-    .set({ status: "delivered", deliveredAt: new Date() })
+    .set(updateData)
     .where(eq(invoicesTable.id, id))
     .returning();
 
   const result = await buildInvoiceResponse(user.shopId!, updated);
-  res.json(result);
+  res.json({ ...result, deliveredQty: deliverQty, isFullyDelivered });
 });
 
 router.get("/shop/invoices/:invoiceId/whatsapp", isManagerOrReception, async (req, res): Promise<void> => {
@@ -513,8 +613,8 @@ router.get("/shop/invoices/:invoiceId/whatsapp", isManagerOrReception, async (re
     return;
   }
 
-  if (!invoice.allSubOrdersReady) {
-    res.status(400).json({ error: "لم تكتمل جميع الطلبات بعد" });
+  if ((invoice.readyQty ?? 0) <= 0 && invoice.status !== 'ready') {
+    res.status(400).json({ error: "لا توجد قطع جاهزة للتسليم" });
     return;
   }
 
@@ -528,19 +628,21 @@ router.get("/shop/invoices/:invoiceId/whatsapp", isManagerOrReception, async (re
   const totalAmount = subOrders.reduce((s, so) => s + so.price, 0);
   const paidAmount = subOrders.reduce((s, so) => s + so.paidAmount, 0);
   const remainingAmount = totalAmount - paidAmount;
+  const readyQty = invoice.readyQty ?? 0;
 
   const customerName = customer?.name ?? "عميلنا الكريم";
   const shopName = shop?.name ?? "محلنا";
   const phone = customer?.phone ?? "";
 
   const bookRef = invoice.bookNumber ? `\nدفتر: ${invoice.bookNumber}${invoice.pageNumber ? ' / صفحة: ' + invoice.pageNumber : ''}` : '';
+  const partialNote = readyQty < totalQty ? `\nالجاهز للاستلام: ${readyQty} من ${totalQty}` : '';
 
   const message =
 `السلام عليكم ${customerName} 🌿
 خياطة ${shopName}
 
-طلبك جاهز للاستلام ✅${bookRef}
-الكمية: ${totalQty} دشداشة
+طلبك جاهز للاستلام ✅${bookRef}${partialNote}
+الكمية: ${readyQty < totalQty ? readyQty : totalQty} دشداشة
 الإجمالي: ${totalAmount.toFixed(3)} د.ك
 المدفوع: ${paidAmount.toFixed(3)} د.ك
 المتبقي: ${remainingAmount > 0 ? remainingAmount.toFixed(3) + ' د.ك' : 'لا يوجد متبقي ✓'}
@@ -586,6 +688,32 @@ router.post('/shop/invoices/:id/history', isManagerOrReception, requireActiveSho
   }).returning();
 
   res.json(entry);
+});
+
+// ─── Stage Movement History ────────────────────────────────────────────────
+router.get('/shop/invoices/:id/stage-history', isShopUser, requireActiveShop, async (req, res) => {
+  const user = req.user as AuthUser;
+  const id = parseInt(req.params.id);
+
+  const [invoice] = await db.select().from(invoicesTable)
+    .where(and(eq(invoicesTable.id, id), eq(invoicesTable.shopId, user.shopId!)));
+  if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
+
+  const history = await db
+    .select({
+      id: stageHistoryTable.id,
+      stage: stageHistoryTable.stage,
+      nextStage: stageHistoryTable.nextStage,
+      qty: stageHistoryTable.qty,
+      completedAt: stageHistoryTable.completedAt,
+      completedByName: usersTable.name,
+    })
+    .from(stageHistoryTable)
+    .leftJoin(usersTable, eq(stageHistoryTable.completedBy, usersTable.id))
+    .where(and(eq(stageHistoryTable.invoiceId, id), eq(stageHistoryTable.shopId, user.shopId!)))
+    .orderBy(desc(stageHistoryTable.completedAt));
+
+  res.json(history);
 });
 
 export default router;
