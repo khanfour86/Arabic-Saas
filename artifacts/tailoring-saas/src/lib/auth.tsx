@@ -20,6 +20,7 @@ const AuthContext = createContext<AuthContextType>({
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('auth_token'));
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const queryClient = useQueryClient();
 
   const { data: user, isLoading, error, refetch } = useGetMe({
@@ -35,14 +36,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [error]);
 
+  useEffect(() => {
+    if (user) {
+      setCurrentUser(user);
+    }
+  }, [user]);
+
   const login = (newToken: string, newUser: CurrentUser) => {
     localStorage.setItem('auth_token', newToken);
+    setCurrentUser(newUser);
     setToken(newToken);
     refetch();
   };
 
   const doLogout = () => {
     localStorage.removeItem('auth_token');
+    setCurrentUser(null);
     setToken(null);
     queryClient.clear();
   };
@@ -54,7 +63,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider value={{ 
-      user: user || null, 
+      user: currentUser, 
       token, 
       isLoading: token ? isLoading : false, 
       login, 
