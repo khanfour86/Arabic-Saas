@@ -21,6 +21,8 @@ import { Loader2 } from "lucide-react";
 
 const queryClient = new QueryClient();
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim().replace(/\/+$/, "");
+const baseUrl = import.meta.env.BASE_URL;
+const loginUrl = new URL("login", window.location.origin + baseUrl).toString();
 
 function withApiBaseUrl(input: RequestInfo | URL): RequestInfo | URL {
   if (!apiBaseUrl) {
@@ -87,7 +89,7 @@ function AppContent() {
 
   // Protect all other routes
   if (!user) {
-    window.location.href = '/login';
+    window.location.href = loginUrl;
     return null;
   }
 
