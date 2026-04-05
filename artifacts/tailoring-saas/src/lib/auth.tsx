@@ -18,7 +18,7 @@ const AuthContext = createContext<AuthContextType>({
   logout: () => {},
 });
 
-const loginUrl = new URL("login", window.location.origin + import.meta.env.BASE_URL).toString();
+const appHomeUrl = new URL(import.meta.env.BASE_URL, window.location.origin).toString();
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('auth_token'));
@@ -60,7 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = () => {
     doLogout();
-    window.location.href = loginUrl;
+    window.location.href = appHomeUrl;
   };
 
   return (

@@ -22,7 +22,7 @@ import { Loader2 } from "lucide-react";
 const queryClient = new QueryClient();
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim().replace(/\/+$/, "");
 const baseUrl = import.meta.env.BASE_URL;
-const loginUrl = new URL("login", window.location.origin + baseUrl).toString();
+const appHomeUrl = new URL(baseUrl, window.location.origin).toString();
 
 function withApiBaseUrl(input: RequestInfo | URL): RequestInfo | URL {
   if (!apiBaseUrl) {
@@ -89,7 +89,7 @@ function AppContent() {
 
   // Protect all other routes
   if (!user) {
-    window.location.href = loginUrl;
+    window.location.href = appHomeUrl;
     return null;
   }
 
