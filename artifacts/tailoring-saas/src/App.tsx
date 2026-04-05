@@ -20,10 +20,39 @@ import { WorkflowDashboard } from "./pages/shop/workflow";
 import { Loader2 } from "lucide-react";
 
 const queryClient = new QueryClient();
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim().replace(/\/+$/, "");
+const baseUrl = import.meta.env.BASE_URL;
+const appHomeUrl = new URL(baseUrl, window.location.origin).toString();
+
+function withApiBaseUrl(input: RequestInfo | URL): RequestInfo | URL {
+  if (!apiBaseUrl) {
+    return input;
+  }
+
+  if (typeof input === "string") {
+    return input.startsWith("/api/") ? `${apiBaseUrl}${input}` : input;
+  }
+
+  if (input instanceof URL) {
+    return input.pathname.startsWith("/api/")
+      ? new URL(`${apiBaseUrl}${input.pathname}${input.search}${input.hash}`)
+      : input;
+  }
+
+  const currentOrigin =
+    typeof window !== "undefined" ? window.location.origin : undefined;
+
+  if (currentOrigin && input.url.startsWith(`${currentOrigin}/api/`)) {
+    return new Request(`${apiBaseUrl}${input.url.slice(currentOrigin.length)}`, input);
+  }
+
+  return input;
+}
 
 // Setup global fetch interceptor to inject JWT token
 const originalFetch = window.fetch;
 window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+  const resolvedInput = withApiBaseUrl(input);
   const token = localStorage.getItem('auth_token');
   if (token) {
     init = init || {};
@@ -33,7 +62,7 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     headers.set('Authorization', `Bearer ${token}`);
     init.headers = headers;
   }
-  return originalFetch(input, init);
+  return originalFetch(resolvedInput, init);
 };
 
 function AppContent() {
@@ -60,7 +89,7 @@ function AppContent() {
 
   // Protect all other routes
   if (!user) {
-    window.location.href = '/login';
+    window.location.href = appHomeUrl;
     return null;
   }
 
